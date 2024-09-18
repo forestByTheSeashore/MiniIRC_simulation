@@ -190,7 +190,6 @@ if __name__ == "__main__":
         # 发送消息
         try:
             while True:
-                receive_thread.wait()
                 msg = input("输入消息 ('/quit' 退出): ")
                 if msg == "/quit":
                     user.stop()  # 停止接收消息线程
