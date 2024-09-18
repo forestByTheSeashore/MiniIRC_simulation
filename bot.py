@@ -74,24 +74,34 @@ class IRCBot:
 
     # 主循环，持续接收并处理消息
     def run(self):
-        while True:
-            try:
-                response = self.socket.recv(2048).decode("utf-8")
-                if response:
-                    for line in response.strip().split("\r\n"):
-                        self.handle_message(line)
-            except socket.timeout:
-                print("连接超时。")
-                break
-            except Exception as e:
-                print(f"发生错误: {e}")
-                break
+        self.socket.settimeout(1.0)  # 设置1秒超时，保证程序定期检查是否有中断信号
+        try:
+            while True:
+                try:
+                    # 从socket接收数据
+                    response = self.socket.recv(2048).decode("utf-8")
+                    if response:
+                        for line in response.strip().split("\r\n"):
+                            self.handle_message(line)
+                except socket.timeout:
+                    # 连接超时，检查是否需要退出
+                    continue  # 继续循环，不退出程序
+                except Exception as e:
+                    print(f"发生错误: {e}")
+                    break  # 出现其他错误时退出循环
+        except KeyboardInterrupt:
+            print("检测到中断信号，正在停止机器人...")
+        finally:
+            # 确保在退出时关闭连接，释放资源
+            self.socket.close()
+            print("已关闭连接，机器人已退出。")
+
 
 # 使用 argparse 解析命令行参数
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC机器人客户端")
-    parser.add_argument("--host", type=str, default="fc00:1337::17", help="服务器地址")
-    parser.add_argument("--port", type=int, default=6666, help="服务器端口")
+    parser.add_argument("--host", type=str, default="::1", help="服务器地址")
+    parser.add_argument("--port", type=int, default="6667", help="服务器端口")
     parser.add_argument("--name", type=str, default="SuperBot", help="机器人的昵称")
     parser.add_argument("--channel", type=str, default="#hello", help="要加入的频道")
 
