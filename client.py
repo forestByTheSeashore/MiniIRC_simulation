@@ -2,6 +2,18 @@ import socket
 import random
 import argparse
 
+
+class Client:
+    def __init__(self, host, port, name, channel):
+        self.server = host
+        self.port = port
+        self.name = name
+        self.channel = channel
+        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+
+
+
 # 定义机器人的命令响应功能
 class IRCBot:
     def __init__(self, host, port, name, channel):
