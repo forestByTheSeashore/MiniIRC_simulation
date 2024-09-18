@@ -97,6 +97,7 @@ class IRCBot:
             print("已关闭连接，机器人已退出。")
 
 
+
 # 使用 argparse 解析命令行参数
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC机器人客户端")
