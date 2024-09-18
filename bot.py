@@ -98,6 +98,7 @@ class IRCBot:
         self.socket.close()
 
 
+
 # 使用 argparse 解析命令行参数
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC机器人客户端")
