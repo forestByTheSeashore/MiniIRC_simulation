@@ -4,58 +4,67 @@ import argparse
 import threading
 
 
-# 定义机器人的命令响应功能
+# Define the bot's command response functionality,
 class IRCBot:
+    #Bot instantiates datastructures required for network communication
+
     def __init__(self, host, port, name, channel):
         self.server = host
         self.port = port
         self.name = name
         self.channel = channel
         self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        # Keeping the connection to miniircd alive, and managing it efficiently
+        # Reasonable timeouts and error handling
         self.socket.settimeout(300)
         self.running = True  # Used to end looping
-        self.responses = ["有趣的事实：猫头鹰的眼睛并不能移动！",
-                          "无聊的事实：你刚才浪费了2秒时间！",
-                          "随机的回答！"]
+        self.responses = ["Fun fact: Owls cannot move their eyes!",
+                          "Boring fact: You just wasted 2 seconds!",
+                          "Random response!"]
+        #Bot instantiates datastructures required for network communication
+        # Initialize dictionary to store users in each channel
+        self.channel_users = {}
 
-    # 连接到服务器并加入频道
+    # Connect to the server and join the channel, Bot correctly identify
+    # himself to the miniircd server
     def connect(self):
-        print(f"连接到服务器 {self.server}...")
+        print(f"Connecting to server {self.server}...")
         self.socket.connect((self.server, self.port, 0, 0))
         self.send_command(f"NICK {self.name}")
         self.send_command(f"USER {self.name} 0 * :{self.name}")
         self.join_channel(self.channel)
 
-    # 发送指令到IRC服务器
+    # Send a command to the IRC server
     def send_command(self, command):
-        print(f"发送: {command}")
+        print(f"Sending: {command}")
         self.socket.send((command + "\r\n").encode())
 
-    # 加入频道
+    # Join a channel
     def join_channel(self, channel):
         self.send_command(f"JOIN {channel}")
+        self.get_other_users(channel, self.name)  #Get and save user information immediately after joining the channel
 
-    # 处理接收到的消息
+    # Handle received messages
     def handle_message(self, message):
-        print(f"收到消息: {message}")
+        # Keeping the connection to miniircd alive, and managing it efficiently
+        print(f"Received message: {message}")
         if message.startswith("PING"):
-            self.send_command(f"PONG {message.split()[1]}")  # 回应服务器的PING
+            self.send_command(f"PONG {message.split()[1]}")  #Respond to the server's PING
 
         elif "PRIVMSG" in message:
-            user = message.split('!')[0][1:]  # 获取用户名
+            user = message.split('!')[0][1:]  # Get the username
             channel = message.split()[2]
             msg_content = message.split(f"PRIVMSG {channel} :")[1]
 
             if msg_content.startswith("!"):
                 self.process_command(user, channel, msg_content.strip())
-
             else:
-                # 私信随机回复
-                if channel == self.name:  # 如果频道名等于机器人的名字，则是私信
+                # Respond to private messages with a random reply
+                if channel == self.name:  # If the channel name is the bot's name, it's a private message
                     random_reply = random.choice(self.responses)
                     self.send_command(f"PRIVMSG {user} :{random_reply}")
 
-    # 处理特定命令
+    # Handle specific commands
     def process_command(self, user, channel, command):
         if command == "!hello":
             self.send_command(f"PRIVMSG {channel} :Hello {user}!")
@@ -64,22 +73,23 @@ class IRCBot:
             other_users = self.get_other_users(channel, user)
             if other_users:
                 target = random.choice(other_users)
-                self.send_command(f"PRIVMSG {channel} :{user} 打了 {target} 一巴掌！")
+                self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
             else:
-                self.send_command(f"PRIVMSG {channel} :没有其他用户可供拍打。")
+                self.send_command(f"PRIVMSG {channel} :No other users to slap.")
 
     def get_other_users(self, channel, exclude_user):
         self.send_command(f"NAMES {channel}")
         response = self.socket.recv(2048).decode("utf-8")
-        # 根据响应提取用户列表（简单示例，需根据具体的IRC服务器响应格式处理）
+        # 提取用户列表并存储
         user_list = [user for user in response.split() if user != exclude_user and user != self.name]
+        self.channel_users[channel] = user_list  # Saves the list of users to a dictionary
         return user_list
 
-    # 主循环，持续接收并处理消息
+    # Main loop to continuously receive and process messages
     def run(self):
         while self.running:
             try:
-                # 从socket接收数据
+                # Receive data from the socket
                 response = self.socket.recv(2048).decode("utf-8")
                 if response:
                     for line in response.strip().split("\r\n"):
@@ -88,41 +98,36 @@ class IRCBot:
                 print("Connection timeout.")
                 break
             except Exception as e:
-                if self.running:  # 只在非正常停止时打印错误
-                    print(f"发生错误: {e}")
+                if self.running:  # Only print errors if stopping was not intentional
+                    print(f"Error occurred: {e}")
                 break
         print("Terminating bot...")
-        
+
     def stop(self):
         self.running = False
         self.socket.close()
 
 
-
-# 使用 argparse 解析命令行参数
+# Use argparse to parse command-line arguments
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="IRC机器人客户端")
-    parser.add_argument("--host", type=str, default="::1", help="服务器地址")
-    parser.add_argument("--port", type=int, default="6667", help="服务器端口")
-    parser.add_argument("--name", type=str, default="SuperBot", help="机器人的昵称")
-    parser.add_argument("--channel", type=str, default="#hello", help="要加入的频道")
+    parser = argparse.ArgumentParser(description="IRC bot client")
+    parser.add_argument("--host", type=str, default="::1", help="Server address")
+    parser.add_argument("--port", type=int, default="6667", help="Server port")
+    parser.add_argument("--name", type=str, default="SuperBot", help="Bot's nickname")
+    parser.add_argument("--channel", type=str, default="#hello", help="Channel to join")
 
     args = parser.parse_args()
 
     bot = IRCBot(args.host, args.port, args.name, args.channel)
     bot.connect()
-   
+
     thread = threading.Thread(target=bot.run)
     thread.start()
-     # 发送消息
+    # Send messages
     try:
-       while True:
+        while True:
             msg = input()
     except KeyboardInterrupt:
-            bot.stop()
-            thread.join()
-            print("\n退出客户端")
-       
-            
-            
-    
+        bot.stop()
+        thread.join()
+        print("\nExiting client")
