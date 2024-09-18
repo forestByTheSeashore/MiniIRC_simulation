@@ -1,6 +1,8 @@
 import socket
 import random
 import argparse
+import threading
+
 
 # 定义机器人的命令响应功能
 class IRCBot:
@@ -11,6 +13,7 @@ class IRCBot:
         self.channel = channel
         self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         self.socket.settimeout(300)
+        self.running = True  # Used to end looping
         self.responses = ["有趣的事实：猫头鹰的眼睛并不能移动！",
                           "无聊的事实：你刚才浪费了2秒时间！",
                           "随机的回答！"]
@@ -74,27 +77,25 @@ class IRCBot:
 
     # 主循环，持续接收并处理消息
     def run(self):
-        self.socket.settimeout(1.0)  # 设置1秒超时，保证程序定期检查是否有中断信号
-        try:
-            while True:
-                try:
-                    # 从socket接收数据
-                    response = self.socket.recv(2048).decode("utf-8")
-                    if response:
-                        for line in response.strip().split("\r\n"):
-                            self.handle_message(line)
-                except socket.timeout:
-                    # 连接超时，检查是否需要退出
-                    continue  # 继续循环，不退出程序
-                except Exception as e:
+        while self.running:
+            try:
+                # 从socket接收数据
+                response = self.socket.recv(2048).decode("utf-8")
+                if response:
+                    for line in response.strip().split("\r\n"):
+                        self.handle_message(line)
+            except socket.timeout:
+                print("Connection timeout.")
+                break
+            except Exception as e:
+                if self.running:  # 只在非正常停止时打印错误
                     print(f"发生错误: {e}")
-                    break  # 出现其他错误时退出循环
-        except KeyboardInterrupt:
-            print("检测到中断信号，正在停止机器人...")
-        finally:
-            # 确保在退出时关闭连接，释放资源
-            self.socket.close()
-            print("已关闭连接，机器人已退出。")
+                break
+        print("Terminating bot...")
+        
+    def stop(self):
+        self.running = False
+        self.socket.close()
 
 
 # 使用 argparse 解析命令行参数
@@ -109,4 +110,18 @@ if __name__ == "__main__":
 
     bot = IRCBot(args.host, args.port, args.name, args.channel)
     bot.connect()
-    bot.run()
+   
+    thread = threading.Thread(target=bot.run)
+    thread.start()
+     # 发送消息
+    try:
+       while True:
+            msg = input()
+    except KeyboardInterrupt:
+            bot.stop()
+            thread.join()
+            print("\n退出客户端")
+       
+            
+            
+    
