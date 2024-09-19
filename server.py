@@ -1,44 +1,84 @@
 import socket
 import threading
-# 信号处理
 import signal
 import sys
 import time
+import re
 
-# 创建服务器套接字
-server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+# 常量定义
+HOST = '::'  # 监听所有IPv6地址
+PORT = 6667
+PING_INTERVAL = 60  # 发送PING的时间间隔（秒）
+PING_TIMEOUT = 120  # PONG超时时间（秒）
+BUFFER_SIZE = 1024
+NICKNAME_REGEX = re.compile(r'^[A-Za-z][A-Za-z0-9_]{2,15}$')  # 3-16字符，以字母开头
 
-# 绑定端口6667，并监听所有IPv6地址
-server_socket.bind(('::', 6667))
-server_socket.listen(5)
-
-print("Server activated, waiting for connection...")
-
+# 全局数据结构及锁
 clients = {}
 channels = {}
+clients_lock = threading.Lock()
+channels_lock = threading.Lock()
+
+class Client:
+    def __init__(self, socket, address):
+        self.socket = socket
+        self.address = address
+        self.nickname = None
+        self.username = None
+        self.realname = None
+        self.last_pong = time.time()
+        self.channels = set()
+        self.lock = threading.Lock()
+
+    def send(self, message):
+        try:
+            with self.lock:
+                self.socket.sendall(message.encode('utf-8'))
+        except Exception as e:
+            print(f"Error sending message to {self.nickname}: {e}")
+
+    def close(self, reason="Disconnected"):
+        try:
+            self.socket.close()
+        except:
+            pass
+        if self.nickname:
+            with clients_lock:
+                if self.nickname in clients:
+                    del clients[self.nickname]
+            leave_all_channels(self)
+            broadcast(f":server NOTICE * :{self.nickname} has left the chat room ({reason})\r\n", exclude=self)
+            print(f"{self.nickname} has disconnected: {reason}")
+
+def broadcast(message, exclude=None):
+    with clients_lock:
+        for client in clients.values():
+            if client != exclude:
+                client.send(message)
+
+def leave_all_channels(client):
+    with channels_lock:
+        for channel in list(client.channels):
+            if channel in channels:
+                channels[channel].discard(client.nickname)
+                if not channels[channel]:
+                    del channels[channel]
+                else:
+                    broadcast(f":server NOTICE {channel} :{client.nickname} has left the channel\r\n", exclude=client)
+            client.channels.discard(channel)
+
+def validate_nickname(nickname):
+    return NICKNAME_REGEX.match(nickname) is not None
 
 def handle_client(client_socket, addr):
-    username = None
-    nickname = None
-    realname = None
-    connected = False
-    last_pong_time = time.time()
+    client = Client(client_socket, addr)
+    print(f"Client connected: {addr}")
 
-    def send_ping():
-        while True:
-            time.sleep(60)
-            try:
-                ping_message = "PING :server\r\n"
-                client_socket.sendall(ping_message.encode('utf-8'))
-                # print(f"Sent: {ping_message.strip()}")
-            except Exception as e:
-                # print(f"Error sending PING: {e}")
-                break
-
-    ping_thread = threading.Thread(target=send_ping)
+    # 启动PING线程
+    ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
     ping_thread.start()
 
+<<<<<<< HEAD
     while not connected:
         try:
             # print("Waiting for NICK and USER commands...")
@@ -130,50 +170,225 @@ def broadcast(message, exclude_socket=None):
     # print(f"Current clients: {list(clients.keys())}")
     for client_socket in clients.values():
         if client_socket != exclude_socket:
+=======
+    try:
+        while True:
+>>>>>>> 81590a3550dcec5ccd54b9e431da8ec959df279a
             try:
-                client_socket.sendall(message.encode('utf-8'))
-                print(f"Broadcasted: {message.strip()}")
+                data = client.socket.recv(BUFFER_SIZE)
+                if not data:
+                    print(f"No data received. Closing connection for {client.nickname}")
+                    break
+                messages = data.decode('utf-8').strip().split('\r\n')
+                for message in messages:
+                    if message:
+                        process_command(client, message)
+            except socket.timeout:
+                continue
             except Exception as e:
-                print(f"Error broadcasting message: {e}")
+                print(f"Error receiving data from {client.nickname}: {e}")
+                break
+    finally:
+        client.close()
 
-def join_channel(client_socket, username, channel_name):
-    if channel_name not in channels:
-        channels[channel_name] = []
+def process_command(client, message):
+    print(f"Received from {client.nickname or 'Unknown'}: {message}")
+    parts = message.split(' ', 2)
+    command = parts[0].upper()
+    print(f"Command: {command}")
 
-    channels[channel_name].append(username)
-    client_socket.sendall(f"You've entered the channel: {channel_name}\r\n".encode('utf-8'))
-    broadcast(f"{username} joined the channel {channel_name}\r\n", exclude_socket=client_socket)
+    if command == "NICK":
+        if len(parts) < 2:
+            client.send("ERROR :No nickname provided\r\n")
+            return
+        new_nick = parts[1]
+        if not validate_nickname(new_nick):
+            client.send("ERROR :Invalid nickname. Nicknames must be 3-16 characters, start with a letter, and contain only letters, numbers, and underscores.\r\n")
+            return
+        with clients_lock:
+            if new_nick in clients:
+                client.send("ERROR :Nickname is already in use\r\n")
+                return
+            old_nick = client.nickname
+            client.nickname = new_nick
+            clients[new_nick] = client
+            if old_nick and old_nick in clients:
+                del clients[old_nick]
+        client.send(f":server NOTICE * :Nickname set to {new_nick}\r\n")
+        print(f"Client set nickname to {new_nick}")
 
-def send_channel_message(channel_name, username, message):
-    if channel_name in channels:
-        for member in channels[channel_name]:
-            if member in clients:
-                try:
-                    clients[member].sendall(f"[{channel_name}] {username}: {message}\r\n".encode('utf-8'))
-                except Exception as e:
-                    print(f"Error sending channel message to {member}: {e}")
+    elif command == "USER":
+        print(f"parts: {parts}")
+        # if len(parts) < 2:
+        #     client.send("ERROR :Not enough parameters for USER\r\n")
+        #     return
+        # user_params = parts[1].split(' ', 3)
+        # print(f"user_params: {user_params}")
+        # if len(user_params) < 4:
+        # # if len(user_params) < 1:
+        #     print(len(user_params))
+        #     client.send("ERROR :Not enough parameters for USER\r\n")
+        #     return
+        # client.username = user_params[0]
+        # client.realname = user_params[3].lstrip(':')
+        if len(parts) < 2:
+            client.send("ERROR :Not enough parameters for USER\r\n")
+            return
+        # Assign username and realname directly
+        client.username = parts[2]
+        # Optionally store hostname and servername if needed
+        # client.hostname = parts[2]
+        # client.servername = parts[3]
+        # client.realname = ' '.join(parts[4:]).lstrip(':')
+        print(f"Client {client.nickname} set username to {client.username} and realname to {client.realname}")
+        if client.nickname and client.username and not hasattr(client, 'registered'):
+            client.registered = True
+            client.send(f":server 001 {client.nickname} :Welcome to the IRC server, {client.nickname}\r\n")
+            broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
-def send_private_message(username_from, username_to, message):
-    if username_to in clients:
-        clients[username_to].sendall(f"Chat from {username_from}: {message}\r\n".encode('utf-8'))
+    elif command == "PONG":
+        client.last_pong = time.time()
+        print(f"Received PONG from {client.nickname}")
+
+    elif command == "JOIN":
+        if len(parts) < 2:
+            client.send("ERROR :No channel name provided\r\n")
+            return
+        channel_name = parts[1]
+        if not channel_name.startswith("#"):
+            client.send("ERROR :Invalid channel name. Channel names must start with '#'\r\n")
+            return
+        join_channel(client, channel_name)
+
+    elif command == "PART":
+        if len(parts) < 2:
+            client.send("ERROR :No channel name provided\r\n")
+            return
+        channel_name = parts[1]
+        part_channel(client, channel_name)
+
+    elif command == "PRIVMSG":
+        if len(parts) < 3:
+            client.send("ERROR :Not enough parameters for PRIVMSG\r\n")
+            return
+        target, msg = parts[1], parts[2].lstrip(':')
+        if target.startswith("#"):
+            send_channel_message(client, target, msg)
+        else:
+            send_private_message(client, target, msg)
+
+    elif command == "QUIT":
+        reason = parts[1].lstrip(':') if len(parts) > 1 else "Client Quit"
+        client.send(f"Goodbye, {client.nickname}!\r\n")
+        client.close(reason)
+
     else:
-        clients[username_from].sendall(f"{username_to} is offline\r\n".encode('utf-8'))
+        client.send("ERROR :Unknown command. Available commands: NICK, USER, JOIN, PRIVMSG, QUIT.\r\n")
 
-def signal_handler(sig, frame):
-    print("Shutting down server...")
-    # client_socket.close()
-    server_socket.close()
-    sys.exit(0)
+def join_channel(client, channel_name):
+    with channels_lock:
+        if channel_name not in channels:
+            channels[channel_name] = set()
+        channels[channel_name].add(client.nickname)
+    client.channels.add(channel_name)
+    client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
+    broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel\r\n", exclude=client)
+    print(f"{client.nickname} joined channel {channel_name}")
 
-def start_server():
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+def part_channel(client, channel_name):
+    with channels_lock:
+        if channel_name in channels and client.nickname in channels[channel_name]:
+            channels[channel_name].discard(client.nickname)
+            if not channels[channel_name]:
+                del channels[channel_name]
+            else:
+                broadcast(f":server NOTICE {channel_name} :{client.nickname} has left the channel\r\n", exclude=client)
+            client.channels.discard(channel_name)
+            client.send(f":server NOTICE {channel_name} :You've left the channel {channel_name}\r\n")
+            print(f"{client.nickname} left channel {channel_name}")
+        else:
+            client.send(f"ERROR :You are not in channel {channel_name}\r\n")
 
+def send_channel_message(sender, channel_name, message):
+    with channels_lock:
+        if channel_name not in channels:
+            sender.send(f"ERROR :No such channel {channel_name}\r\n")
+            return
+        members = channels[channel_name].copy()
+    for member_nick in members:
+        if member_nick in clients and member_nick != sender.nickname:
+            try:
+                clients[member_nick].send(f"[{channel_name}] {sender.nickname}: {message}\r\n")
+            except Exception as e:
+                print(f"Error sending channel message to {member_nick}: {e}")
+    print(f"{sender.nickname} sent message to {channel_name}: {message}")
+
+def send_private_message(sender, target_nick, message):
+    with clients_lock:
+        target_client = clients.get(target_nick)
+    if target_client:
+        try:
+            target_client.send(f"Chat from {sender.nickname}: {message}\r\n")
+            sender.send(f"Chat to {target_nick}: {message}\r\n")
+            print(f"{sender.nickname} sent private message to {target_nick}: {message}")
+        except Exception as e:
+            print(f"Error sending private message to {target_nick}: {e}")
+    else:
+        sender.send(f"ERROR :{target_nick} is offline\r\n")
+
+def ping_client(client):
     while True:
-        client_socket, addr = server_socket.accept()
-        print(f"Client connected: {addr}")
-        client_handler = threading.Thread(target=handle_client, args=(client_socket, addr))
-        client_handler.start()
+        time.sleep(PING_INTERVAL)
+        try:
+            current_time = time.time()
+            if current_time - client.last_pong > PING_TIMEOUT:
+                print(f"{client.nickname} did not respond to PING, disconnecting...")
+                client.send("ERROR :Closing Link: (Ping timeout)\r\n")
+                client.close("Ping timeout")
+                break
+            client.send("PING :server\r\n")
+            print(f"Sent PING to {client.nickname}")
+        except Exception as e:
+            print(f"Error in ping_thread for {client.nickname}: {e}")
+            client.close("Ping thread error")
+            break
+
+# def signal_handler(sig, frame):
+#     print("\nShutting down server...")
+#     with clients_lock:
+#         for client in list(clients.values()):
+#             client.send("ERROR :Server is shutting down\r\n")
+#             client.close("Server shutdown")
+#     server_socket.close()
+#     sys.exit(0)
+
+def main():
+    global server_socket
+    server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen(5)
+    server_socket.settimeout(1.0)  # 设置超时时间以便定期检查信号
+
+    print(f"Server activated on {HOST}:{PORT}, waiting for connections...")
+
+    # # 注册信号处理器
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTERM, signal_handler)
+
+    try:
+        while True:
+            try:
+                client_socket, addr = server_socket.accept()
+                client_socket.settimeout(None)  # 阻塞模式
+                client_thread = threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True)
+                client_thread.start()
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(f"Error accepting connections: {e}")
+    finally:
+        server_socket.close()
 
 if __name__ == "__main__":
-    start_server()
+    main()
