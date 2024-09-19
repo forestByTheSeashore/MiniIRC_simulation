@@ -71,8 +71,10 @@ class IRCBot:
 
         elif command.startswith("!slap"):
             other_users = self.get_other_users(channel, user)
+            print(other_users)
             if other_users:
                 target = random.choice(other_users)
+
                 self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
             else:
                 self.send_command(f"PRIVMSG {channel} :No other users to slap.")
@@ -80,9 +82,23 @@ class IRCBot:
     def get_other_users(self, channel, exclude_user):
         self.send_command(f"NAMES {channel}")
         response = self.socket.recv(2048).decode("utf-8")
-        # Retain user list and store
-        user_list = [user for user in response.split() if user != exclude_user and user != self.name]
-        self.channel_users[channel] = user_list  # Saves the list of users to a dictionary
+        user_list = []
+
+        # Parse the response to the NAMES command
+        for line in response.split("\r\n"):
+            if "353" in line:  # '353' is a response code for the NAMES command, indicating the start of the user list
+                # Usernames are usually at the end of the line, extract everything after the last ":"
+                users = line.split(':')[-1].strip().split()
+                for user in users:
+                    if user != exclude_user and user != self.name:
+                        # Check if the user is the bot itself
+                        if user == self.name:
+                            print(f"Identified bot: {user}")
+                        else:
+                            user_list.append(user)
+
+        # Save the user list for the channel
+        self.channel_users[channel] = user_list
         return user_list
 
     # Main loop to continuously receive and process messages
@@ -113,7 +129,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC bot client")
     parser.add_argument("--host", type=str, default="::1", help="Server address")
     parser.add_argument("--port", type=int, default="6667", help="Server port")
-    parser.add_argument("--name", type=str, default="SuperBot", help="Bot's nickname")
+    parser.add_argument("--name", type=str, default="bbbb", help="Bot's nickname")
     parser.add_argument("--channel", type=str, default="#hello", help="Channel to join")
 
     args = parser.parse_args()
