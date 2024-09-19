@@ -80,7 +80,7 @@ class IRCBot:
     def get_other_users(self, channel, exclude_user):
         self.send_command(f"NAMES {channel}")
         response = self.socket.recv(2048).decode("utf-8")
-        # 提取用户列表并存储
+        # Retain user list and store
         user_list = [user for user in response.split() if user != exclude_user and user != self.name]
         self.channel_users[channel] = user_list  # Saves the list of users to a dictionary
         return user_list
