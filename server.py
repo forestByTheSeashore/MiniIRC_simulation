@@ -18,6 +18,7 @@ clients = {}
 channels = {}
 clients_lock = threading.Lock()
 channels_lock = threading.Lock()
+server_name = "socket"
 
 class Client:
     def __init__(self, socket, address):
@@ -78,102 +79,8 @@ def handle_client(client_socket, addr):
     ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
     ping_thread.start()
 
-<<<<<<< HEAD
-    while not connected:
-        try:
-            # print("Waiting for NICK and USER commands...")
-            message = client_socket.recv(1024).decode('utf-8').strip()
-            # print(f"message for client: {message}")
-            lines = message.split('\r\n')
-            for line in lines:
-                if line.startswith("NICK"):
-                    nickname = line.split(" ")[1]
-                    print(f"nickname: {nickname}")
-
-                    if nickname in clients:
-                        client_socket.sendall(f"ERROR :Nickname is already in use\r\n".encode('utf-8'))
-                        #continue
-                        #关闭客户端连接，阻止其继续连接
-                        client_socket.close()
-                        return  # 直接返回，终止该客户端的处理
-                    else:
-                        print(f"Received NICK: {nickname}")
-
-                elif line.startswith("USER"):
-                    parts = line.split(" ")
-                    username = parts[1]
-                    realname = " ".join(parts[4:])[1:]  # 去掉前面的冒号
-                    connected = True
-                    clients[nickname] = client_socket
-                    client_socket.sendall(f":server 001 {nickname} :Welcome to the IRC server {nickname}\r\n".encode('utf-8'))
-                    print(f"{nickname} ({realname}) connected: {addr}")
-                    broadcast(f":server NOTICE * :{nickname} has joined the chat room\r\n", client_socket)
-        except Exception as e:
-            print(f"Error receiving message: {e}")
-            break
-
-    while True:
-        try:
-            message = client_socket.recv(1024).decode('utf-8').strip()
-            print(f"message for client: {message}")
-
-            if not message:
-                break
-
-            # 解析命令
-            lines = message.split('\r\n')
-            for line in lines:
-                if line.startswith("PONG"):
-                    last_pong_time = time.time()
-                elif line.startswith("JOIN"):
-                    # 加入频道命令, 格式: /join #channel_name
-                    _, channel_name = line.split(" ", 1)
-                    print(f"channel: {channel_name}")
-                    join_channel(client_socket, nickname, channel_name)
-                elif line.startswith("PRIVMSG"):
-                     # 发送消息命令, 格式: PRIVMSG #channel_name :message 或 PRIVMSG username :message
-                    parts = line.split(" ", 2)
-                    target = parts[1]
-                    msg = parts[2][1:]  # 去掉前面的冒号
-                    if target.startswith("#"):
-                        send_channel_message(target, nickname, msg)
-                    else:
-                        send_private_message(nickname, target, msg)
-                    # 发送频道消息, 格式: /msg #channel_name message
-                    # _, channel_name, msg = line.split(" ", 2)
-                    # send_channel_message(channel_name, nickname, msg)
-                # elif line.startswith("MSG"):
-                #     # 发送私聊消息, 格式: /msg username message
-                #     _, target_user, msg = line.split(" ", 2)
-                #     send_private_message(nickname, target_user, msg)
-                elif line.startswith("QUIT"):
-                    # 退出命令, 格式: /quit
-                    client_socket.sendall(f"Goodbye, {nickname}!\r\n")
-                    break
-                else:
-                    client_socket.sendall(f"Unknown command. Please use /join, /msg #channel, or /msg username.\r\n")
-
-            if time.time() - last_pong_time > 120:
-                print(f"{nickname} did not respond to PING, disconnecting...")
-                client_socket.sendall(f"ERROR :Closing Link: {nickname} (Ping timeout)\r\n")
-                break
-        except:
-            break
-
-    # 客户端断开连接
-    client_socket.close()
-    del clients[nickname]
-    broadcast(f"{nickname} has left the chat room\r\n", client_socket)
-
-def broadcast(message, exclude_socket=None):
-    # print(f"Broadcasting message: {message.strip()}")
-    # print(f"Current clients: {list(clients.keys())}")
-    for client_socket in clients.values():
-        if client_socket != exclude_socket:
-=======
     try:
         while True:
->>>>>>> 81590a3550dcec5ccd54b9e431da8ec959df279a
             try:
                 data = client.socket.recv(BUFFER_SIZE)
                 if not data:
@@ -199,22 +106,22 @@ def process_command(client, message):
 
     if command == "NICK":
         if len(parts) < 2:
-            client.send("ERROR :No nickname provided\r\n")
+            client.send(f":{server_name} 431 * :No nickname given\r\n")
             return
         new_nick = parts[1]
         if not validate_nickname(new_nick):
-            client.send("ERROR :Invalid nickname. Nicknames must be 3-16 characters, start with a letter, and contain only letters, numbers, and underscores.\r\n")
+            client.send(f":{server_name} 432 * {new_nick} :Erroneous nickname\r\n")
             return
         with clients_lock:
             if new_nick in clients:
-                client.send("ERROR :Nickname is already in use\r\n")
+                client.send(f":{server_name} 433 * {new_nick} :Nickname is already in use\r\n")
                 return
             old_nick = client.nickname
             client.nickname = new_nick
             clients[new_nick] = client
             if old_nick and old_nick in clients:
                 del clients[old_nick]
-        client.send(f":server NOTICE * :Nickname set to {new_nick}\r\n")
+        client.send(f":{server_name} 001 {new_nick} :Nickname set to {new_nick}\r\n")
         print(f"Client set nickname to {new_nick}")
 
     elif command == "USER":
@@ -232,7 +139,7 @@ def process_command(client, message):
         # client.username = user_params[0]
         # client.realname = user_params[3].lstrip(':')
         if len(parts) < 2:
-            client.send("ERROR :Not enough parameters for USER\r\n")
+            client.send(f":{server_name} 461 {client.nickname} {command} :Not enough parameters\r\n")
             return
         # Assign username and realname directly
         client.username = parts[2]
@@ -243,7 +150,8 @@ def process_command(client, message):
         print(f"Client {client.nickname} set username to {client.username} and realname to {client.realname}")
         if client.nickname and client.username and not hasattr(client, 'registered'):
             client.registered = True
-            client.send(f":server 001 {client.nickname} :Welcome to the IRC server, {client.nickname}\r\n")
+            #client.send(f":server 001 {client.nickname} :Welcome to the IRC server, {client.nickname}\r\n")
+            client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
             broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
     elif command == "PONG":
@@ -252,24 +160,27 @@ def process_command(client, message):
 
     elif command == "JOIN":
         if len(parts) < 2:
-            client.send("ERROR :No channel name provided\r\n")
+            #client.send(f":{server_name} 461 {client.nickname} JOIN :No channel name provided\r\n")
+            client.send(f":{server_name} 461 {client.nickname} JOIN :Not enough parameters\r\n")
             return
         channel_name = parts[1]
         if not channel_name.startswith("#"):
-            client.send("ERROR :Invalid channel name. Channel names must start with '#'\r\n")
+            #client.send(f":{server_name} 479 {client.nickname} {channel_name} :Invalid channel name. Must start with '#'\r\n")
+            client.send(f":{server_name} 476 {client.nickname} {channel_name} :Bad channel mask\r\n")
             return
         join_channel(client, channel_name)
 
     elif command == "PART":
         if len(parts) < 2:
-            client.send("ERROR :No channel name provided\r\n")
+            #client.send(f":{server_name} 461 {client.nickname} PART :No channel name provided\r\n")
+            client.send(f":{server_name} 461 {client.nickname} JOIN :Not enough parameters\r\n")
             return
         channel_name = parts[1]
         part_channel(client, channel_name)
 
     elif command == "PRIVMSG":
         if len(parts) < 3:
-            client.send("ERROR :Not enough parameters for PRIVMSG\r\n")
+            client.send(f":{server_name} 461 {client.nickname} JOIN :Not enough parameters\r\n")
             return
         target, msg = parts[1], parts[2].lstrip(':')
         if target.startswith("#"):
@@ -279,11 +190,14 @@ def process_command(client, message):
 
     elif command == "QUIT":
         reason = parts[1].lstrip(':') if len(parts) > 1 else "Client Quit"
-        client.send(f"Goodbye, {client.nickname}!\r\n")
+        #client.send(f"Goodbye, {client.nickname}!\r\n")
+        client.send(f":{server_name} QUIT :{client.nickname} has quit ({reason})\r\n")
         client.close(reason)
 
     else:
-        client.send("ERROR :Unknown command. Available commands: NICK, USER, JOIN, PRIVMSG, QUIT.\r\n")
+        #client.send("ERROR :Unknown command. Available commands: NICK, USER, JOIN, PRIVMSG, QUIT.\r\n")
+        client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
+
 
 def join_channel(client, channel_name):
     with channels_lock:
@@ -292,7 +206,7 @@ def join_channel(client, channel_name):
         channels[channel_name].add(client.nickname)
     client.channels.add(channel_name)
     client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
-    broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel\r\n", exclude=client)
+    broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel{channel_name}\r\n", exclude=client)
     print(f"{client.nickname} joined channel {channel_name}")
 
 def part_channel(client, channel_name):
@@ -307,12 +221,12 @@ def part_channel(client, channel_name):
             client.send(f":server NOTICE {channel_name} :You've left the channel {channel_name}\r\n")
             print(f"{client.nickname} left channel {channel_name}")
         else:
-            client.send(f"ERROR :You are not in channel {channel_name}\r\n")
+            client.send(f":{server_name} 442 {client.nickname} {channel_name} :You're not on that channel\r\n")
 
 def send_channel_message(sender, channel_name, message):
     with channels_lock:
         if channel_name not in channels:
-            sender.send(f"ERROR :No such channel {channel_name}\r\n")
+            sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
             return
         members = channels[channel_name].copy()
     for member_nick in members:
@@ -343,7 +257,7 @@ def ping_client(client):
             current_time = time.time()
             if current_time - client.last_pong > PING_TIMEOUT:
                 print(f"{client.nickname} did not respond to PING, disconnecting...")
-                client.send("ERROR :Closing Link: (Ping timeout)\r\n")
+                client.send(f":{server_name} ERROR :Closing Link: {client.nickname} (Ping timeout)\r\n")
                 client.close("Ping timeout")
                 break
             client.send("PING :server\r\n")
