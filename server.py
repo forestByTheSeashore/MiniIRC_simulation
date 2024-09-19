@@ -52,7 +52,10 @@ def handle_client(client_socket, addr):
 
                     if nickname in clients:
                         client_socket.sendall(f"ERROR :Nickname is already in use\r\n".encode('utf-8'))
-                        continue
+                        #continue
+                        #关闭客户端连接，阻止其继续连接
+                        client_socket.close()
+                        return  # 直接返回，终止该客户端的处理
                     else:
                         print(f"Received NICK: {nickname}")
 
@@ -64,7 +67,7 @@ def handle_client(client_socket, addr):
                     clients[nickname] = client_socket
                     client_socket.sendall(f":server 001 {nickname} :Welcome to the IRC server {nickname}\r\n".encode('utf-8'))
                     print(f"{nickname} ({realname}) connected: {addr}")
-                    broadcast(":server NOTICE * :{nickname} has joined the chat room\r\n", client_socket)
+                    broadcast(f":server NOTICE * :{nickname} has joined the chat room\r\n", client_socket)
         except Exception as e:
             print(f"Error receiving message: {e}")
             break
