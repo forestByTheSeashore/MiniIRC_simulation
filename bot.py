@@ -129,10 +129,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC bot client")
     parser.add_argument("--host", type=str, default="::1", help="Server address")
     parser.add_argument("--port", type=int, default="6667", help="Server port")
-    parser.add_argument("--name", type=str, default="SuperBot", help="Bot's nickname")
+    parser.add_argument("--name", type=str, default="bbbb", help="Bot's nickname")
     parser.add_argument("--channel", type=str, default="#hello", help="Channel to join")
 
     args = parser.parse_args()
+
+    # Ensure the channel name starts with '#'
+    if not args.channel.startswith('#'):
+        args.channel = f'#{args.channel}'
 
     bot = IRCBot(args.host, args.port, args.name, args.channel)
     bot.connect()
@@ -147,3 +151,4 @@ if __name__ == "__main__":
         bot.stop()
         thread.join()
         print("\nExiting client")
+
