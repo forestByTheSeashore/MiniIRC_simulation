@@ -7,10 +7,10 @@ import re
 
 # Constants
 HOST = '::'  # Listen on all IPv6 addresses
-PORT = 6667
+PORT = 6667 # Port to listen on
 PING_INTERVAL = 60  # Interval (in seconds) between PING messages
 PING_TIMEOUT = 120  # Timeout (in seconds) for PONG responses
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 1024  # Receive buffer size
 NICKNAME_REGEX = re.compile(r'^[A-Za-z][A-Za-z0-9_]{2,15}$')  # Nickname must be 3-16 characters, starting with a letter
 
 # Global data structures and locks
@@ -20,17 +20,19 @@ clients_lock = threading.Lock()  # Lock for accessing the clients dictionary
 channels_lock = threading.Lock()  # Lock for accessing the channels dictionary
 server_name = "socket"  # Server name for messaging
 
+
 class Client:
+    """class representing a connected client."""
     def __init__(self, socket, address):
-        self.socket = socket
-        self.address = address
+        self.socket = socket    # Socket object for the client
+        self.address = address  
         self.nickname = None
         self.username = None
         self.realname = None
         self.last_pong = time.time()  # Last time a PONG was received from the client
         self.channels = set()  # Set of channels the client is a member of
         self.lock = threading.Lock()  # Lock for thread-safe operations on this client
-        self.registered = False
+        self.registered = False # Flag to indicate if the client has completed registration
 
     def send(self, message):
         """Send a message to the client."""
@@ -88,6 +90,8 @@ def handle_client(client_socket, addr):
     ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
     ping_thread.start()
 
+    # Receive and process data from the client
+    # The client should send a message based on the IRC protocol.
     try:
         while True:
             try:
@@ -114,7 +118,8 @@ def process_command(client, message):
     command = parts[0].upper()
     print(f"Command: {command}")
 
-
+    # Handle the command based on the IRC protocol
+    # Send error message based on IRC protocal, with server_name, error_code, target, and error_message
     if command == 'CAP':
         handle_cap_command(client, parts)
 
@@ -192,6 +197,7 @@ def process_command(client, message):
         client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
 
 def handle_cap_command(client, parts):
+    """Handle the cap command, to tell the client the capability the server has."""
     if not parts:
         return
 
@@ -225,6 +231,7 @@ def join_channel(client, channel_name):
     print(f"{client.nickname} joined channel {channel_name}")
 
 def handle_names_command(client, parts):
+    """Send message of the user's name list in the chatroom, including users in specific channel."""
     if len(parts) < 2:
         # if no channels, return all the user lists
         for channel in channels:
@@ -331,5 +338,6 @@ def main():
     finally:
         server_socket.close()
 
+# The main entrance of the server program
 if __name__ == "__main__":
     main()
