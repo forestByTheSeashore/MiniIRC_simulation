@@ -1,3 +1,46 @@
+"""
+IRC Server Implementation
+
+Author: 
+Hongyu Lin
+Jingran Li
+Siming Lv
+
+Date: [2024/9/20]
+
+Description:
+The python project implements a simple IRC (Internet Relay Chat) server, keep to RFC 1459 protocal standard.
+The server supports message communication between clients, including private message and channel message.  It 
+uses TCP socket to maintain the connection with clients, with the ablity to handle commands including NICK、USER、
+JOIN、PART、PRIVMSG and PING/PONG.
+
+Key Features:
+1. use NICK and USER command to login the client
+2. real-time communication between clients, including channel communication and private communication.
+3. send PING message regularly to make sure the client is still in connection. If the client doesn't answer, the server will disconnect the client automatically
+4. create channel dynamically, create channel when a client joins a channel that doesn't exist, delete channel when the last client leave the channel.
+5. use regular expression to verify the nickname, to makesure the nick name corresponds to the stipulation. 
+
+Usage Guide:
+1. after launching, the servber will listen on 6667 port, waiting for the connection
+2. the server supports clients which conform IRC protocal
+3. communication works through TCP on ipv6 (or ipv4).
+
+How to Run:
+1. install python on your system
+2. open the command line, change the current path to the folder's path, input "python server.py", and press enter
+3. connect an IRC client to server.
+
+Known Issues:
+1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
+2. the server may don't completely follow all the IRC protocal specification
+3. channel message can't be sent to the user successfully
+
+Future Improvements:
+1. further normalize the code logic with the IRC specification
+2. implement more IRC commands
+"""
+
 import socket 
 import threading
 import signal
@@ -269,16 +312,17 @@ def send_channel_message(sender, channel_name, message):
             sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
             return
         members = channels[channel_name].copy()
+        
     for member_nick in members:
         if member_nick == sender.nickname:
             continue
         with clients_lock:
             target_client = clients.get(member_nick)
-        if target_client:
-            try:
-                target_client.send(f":{sender.nickname} PRIVMSG {channel_name} :{message}\r\n")
-            except Exception as e:
-                print(f"Error sending channel message to {member_nick}: {e}")
+            if target_client:
+                try:
+                    target_client.send(f":{sender.nickname} PRIVMSG {channel_name} :{message}\r\n")
+                except Exception as e:
+                    print(f"Error sending channel message to {member_nick}: {e}")
     print(f"{sender.nickname} sent message to {channel_name}: {message}")
 
 def send_private_message(sender, target_nick, message):

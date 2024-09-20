@@ -1,3 +1,46 @@
+"""
+IRC Bot Client
+
+Author: 
+Chengyang Zhu 
+Zijian Zhou
+
+Date: [2024/9/20]
+
+Description:
+This Python script implements an IRC (Internet Relay Chat) bot using sockets and threading. 
+The bot connects to an IRC server, joins a specified channel, and interacts with users by responding to specific commands or private messages.
+
+
+Key Features:
+1. the bot connect IRC server using ipv6, and enter the target channel
+2. the bot can handle the following command:
+- '!hello' command will make the bot say hello to the user
+- '!slap' command will simulate an interaction, randomly 'slap' another user in a channel
+3. the bot can randomly reply an interesting fact or other replies
+4. the bot can relply PING command from server, make sure the connection active
+5. the bot can use 'NAME' command to fetch user list in the current channel, making sure it won't 'slap' itself
+6. can handle the situation of connection timeout and other exceptions
+
+
+Usage Instructions:
+when running the bot script, use the command line to input Host, port, robot name, and channel to join
+python bot.py --host <server address> --port <port> --name <bot name> --channel <channel>
+example: python bot.py --host ::1 --port 6667 --name SuperBot --channel hello
+NOTICE!: Do not use "#" when entering bot name. eg: use "superbot" instead of "#superbot"
+the bot will continue running and listening on target server, you can stop the bot using 'ctrl + c' command
+
+Command-Line Arguments:
+1. '--host': address of thge IRC server, defaulted as '::1'(ipv6)
+2. `--port`: The port number for the server. Defaults to `6667`.
+3. `--name`: The nickname of the bot. Defaults to `SuperBot`.
+4. `--channel`: The channel to join. Defaults to `#hello`. If a channel name is passed without the '#' prefix, the bot automatically adds it.
+
+
+Dependencies:
+the bot script uses only the standard python library: 'socket'、'random'、'argparse' and 'threading', please make sure Python3 is installed in your system.
+"""
+
 import socket
 import random
 import argparse
