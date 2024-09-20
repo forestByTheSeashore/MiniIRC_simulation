@@ -118,7 +118,7 @@ def process_command(client, message):
     if command == 'CAP':
         handle_cap_command(client, parts)
 
-    if command == "NICK":
+    elif command == "NICK":
         if len(parts) < 2:
             client.send(f":{server_name} 431 * :No nickname given\r\n")
             return
