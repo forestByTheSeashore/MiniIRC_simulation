@@ -30,10 +30,7 @@ class Client:
         self.last_pong = time.time()  # Last time a PONG was received from the client
         self.channels = set()  # Set of channels the client is a member of
         self.lock = threading.Lock()  # Lock for thread-safe operations on this client
-<<<<<<< HEAD
         self.registered = False
-=======
->>>>>>> 2911f38b161e0252d34f4d0a8571ea8e8b6220dc
 
     def send(self, message):
         """Send a message to the client."""
@@ -194,7 +191,6 @@ def process_command(client, message):
     else:
         client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
 
-<<<<<<< HEAD
 def handle_cap_command(client, parts):
     if not parts:
         return
@@ -217,8 +213,6 @@ def handle_cap_command(client, parts):
         # Unknown CAP subcommand
         client.send(f":{server_name} 410 {client.nickname} :Invalid CAP subcommand\r\n")
 
-=======
->>>>>>> 2911f38b161e0252d34f4d0a8571ea8e8b6220dc
 def join_channel(client, channel_name):
     """Add the client to a channel and notify other members."""
     with channels_lock:
