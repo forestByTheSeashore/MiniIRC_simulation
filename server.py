@@ -1,3 +1,46 @@
+"""
+IRC Server Implementation
+
+Author: 
+Hongyu Lin
+Jingran Li
+Siming Lv
+
+Date: [2024/9/20]
+
+Description:
+The python project implements a simple IRC (Internet Relay Chat) server, keep to RFC 1459 protocal standard.
+The server supports message communication between clients, including private message and channel message.  It 
+uses TCP socket to maintain the connection with clients, with the ablity to handle commands including NICK、USER、
+JOIN、PART、PRIVMSG and PING/PONG.
+
+Key Features:
+1. use NICK and USER command to login the client
+2. real-time communication between clients, including channel communication and private communication.
+3. send PING message regularly to make sure the client is still in connection. If the client doesn't answer, the server will disconnect the client automatically
+4. create channel dynamically, create channel when a client joins a channel that doesn't exist, delete channel when the last client leave the channel.
+5. use regular expression to verify the nickname, to makesure the nick name corresponds to the stipulation. 
+
+Usage Guide:
+1. after launching, the servber will listen on 6667 port, waiting for the connection
+2. the server supports clients which conform IRC protocal
+3. communication works through TCP on ipv6 (or ipv4).
+
+How to Run:
+1. install python on your system
+2. open the command line, change the current path to the folder's path, input "python server.py", and press enter
+3. connect an IRC client to server.
+
+Known Issues:
+1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
+2. the server may don't completely follow all the IRC protocal specification
+3. channel message can't be sent to the user successfully
+
+Future Improvements:
+1. further normalize the code logic with the IRC specification
+2. implement more IRC commands
+"""
+
 import socket 
 import threading
 import signal
@@ -229,12 +272,33 @@ def join_channel(client, channel_name):
     with channels_lock:
         if channel_name not in channels:
             channels[channel_name] = set()
-        channels[channel_name].add(client)
+        channels[channel_name].add(client.nickname)  # Add nickname instead of client object
     client.channels.add(channel_name)
+<<<<<<< HEAD
     client.send(f":{client.nickname}!{client.username}@")
     client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
     broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel {channel_name}\r\n", exclude=client)
+=======
+
+    # Send JOIN confirmation message
+    client.send(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n")
+
+    # Send channel topic (if any)
+    topic = "No topic is set"  # Placeholder for channel topic
+    client.send(f":{server_name} 332 {client.nickname} {channel_name} :{topic}\r\n")
+
+    # Send NAMES list
+    user_list = ' '.join(channels[channel_name])
+    client.send(f":{server_name} 353 {client.nickname} = {channel_name} :{user_list}\r\n")
+    client.send(f":{server_name} 366 {client.nickname} {channel_name} :End of /NAMES list.\r\n")
+
+    # Notify other members in the channel
+    broadcast(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n", exclude=client)
+>>>>>>> 3d034910324f178372ca175505e5479398db4fca
     print(f"{client.nickname} joined channel {channel_name}")
+
+    # Print the client in the current channel
+    print(f"Current channel {channel_name}: {channels[channel_name]}")
 
 def handle_names_command(client, parts):
     """Send message of the user's name list in the chatroom, including users in specific channel."""
@@ -253,17 +317,23 @@ def handle_names_command(client, parts):
         else:
             client.send(f":{server_name} 403 {client.nickname} {channel} :No such channel\r\n")
 
+
 def part_channel(client, channel_name):
     """Remove the client from a channel and notify other members."""
     with channels_lock:
         if channel_name in channels and client.nickname in channels[channel_name]:
+            # Notify other members in the channel
+            broadcast(f":{client.nickname}!{client.username}@{client.address[0]} PART {channel_name}\r\n",
+                      exclude=client)
+
+            # Remove the client from the channel
             channels[channel_name].discard(client.nickname)
             if not channels[channel_name]:
                 del channels[channel_name]
-            else:
-                broadcast(f":server NOTICE {channel_name} :{client.nickname} has left the channel\r\n", exclude=client)
             client.channels.discard(channel_name)
-            client.send(f":server NOTICE {channel_name} :You've left the channel {channel_name}\r\n")
+
+            # Send PART confirmation message to the client
+            client.send(f":{client.nickname}!{client.username}@{client.address[0]} PART {channel_name}\r\n")
             print(f"{client.nickname} left channel {channel_name}")
         else:
             client.send(f":{server_name} 442 {client.nickname} {channel_name} :You're not on that channel\r\n")
@@ -275,16 +345,17 @@ def send_channel_message(sender, channel_name, message):
             sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
             return
         members = channels[channel_name].copy()
+        
     for member_nick in members:
         if member_nick == sender.nickname:
             continue
         with clients_lock:
             target_client = clients.get(member_nick)
-        if target_client:
-            try:
-                target_client.send(f":{sender.nickname} PRIVMSG {channel_name} :{message}\r\n")
-            except Exception as e:
-                print(f"Error sending channel message to {member_nick}: {e}")
+            if target_client:
+                try:
+                    target_client.send(f":{sender.nickname} PRIVMSG {channel_name} :{message}\r\n")
+                except Exception as e:
+                    print(f"Error sending channel message to {member_nick}: {e}")
     print(f"{sender.nickname} sent message to {channel_name}: {message}")
 
 def send_private_message(sender, target_nick, message):
