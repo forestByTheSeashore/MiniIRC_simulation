@@ -274,11 +274,6 @@ def join_channel(client, channel_name):
             channels[channel_name] = set()
         channels[channel_name].add(client.nickname)  # Add nickname instead of client object
     client.channels.add(channel_name)
-<<<<<<< HEAD
-    client.send(f":{client.nickname}!{client.username}@")
-    client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
-    broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel {channel_name}\r\n", exclude=client)
-=======
 
     # Send JOIN confirmation message
     client.send(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n")
@@ -294,7 +289,6 @@ def join_channel(client, channel_name):
 
     # Notify other members in the channel
     broadcast(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n", exclude=client)
->>>>>>> 3d034910324f178372ca175505e5479398db4fca
     print(f"{client.nickname} joined channel {channel_name}")
 
     # Print the client in the current channel
