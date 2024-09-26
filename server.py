@@ -18,7 +18,8 @@ clients = {}  # Dictionary of connected clients
 channels = {}  # Dictionary of channels and their members
 clients_lock = threading.Lock()  # Lock for accessing the clients dictionary
 channels_lock = threading.Lock()  # Lock for accessing the channels dictionary
-server_name = "socket"  # Server name for messaging
+server_name = "MyIRC"  # Server name for messaging
+server_version = "1.0"
 
 
 class Client:
@@ -152,6 +153,10 @@ def process_command(client, message):
         if client.nickname and client.username and not hasattr(client, 'registered'):
             client.registered = True
             client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
+            client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
+            client.send(f":{server_name} 003 {client.nickname} :This server is created sometime\r\n")
+            client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
+            client.send(f":{server_name} 251 {client.nickname} There are {len(clients)} users and 1 server\r\n")
             broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
     elif command == "PONG":
@@ -226,6 +231,7 @@ def join_channel(client, channel_name):
             channels[channel_name] = set()
         channels[channel_name].add(client)
     client.channels.add(channel_name)
+    client.send(f":{client.nickname}!{client.username}@")
     client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
     broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel {channel_name}\r\n", exclude=client)
     print(f"{client.nickname} joined channel {channel_name}")
