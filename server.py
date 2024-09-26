@@ -267,11 +267,27 @@ def join_channel(client, channel_name):
     with channels_lock:
         if channel_name not in channels:
             channels[channel_name] = set()
-        channels[channel_name].add(client)
+        channels[channel_name].add(client.nickname)  # Add nickname instead of client object
     client.channels.add(channel_name)
-    client.send(f":server NOTICE {channel_name} :You've entered the channel {channel_name}\r\n")
-    broadcast(f":server NOTICE {channel_name} :{client.nickname} has joined the channel {channel_name}\r\n", exclude=client)
+
+    # Send JOIN confirmation message
+    client.send(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n")
+
+    # Send channel topic (if any)
+    topic = "No topic is set"  # Placeholder for channel topic
+    client.send(f":{server_name} 332 {client.nickname} {channel_name} :{topic}\r\n")
+
+    # Send NAMES list
+    user_list = ' '.join(channels[channel_name])
+    client.send(f":{server_name} 353 {client.nickname} = {channel_name} :{user_list}\r\n")
+    client.send(f":{server_name} 366 {client.nickname} {channel_name} :End of /NAMES list.\r\n")
+
+    # Notify other members in the channel
+    broadcast(f":{client.nickname}!{client.username}@{client.address[0]} JOIN {channel_name}\r\n", exclude=client)
     print(f"{client.nickname} joined channel {channel_name}")
+
+    # Print the client in the current channel
+    print(f"Current channel {channel_name}: {channels[channel_name]}")
 
 def handle_names_command(client, parts):
     """Send message of the user's name list in the chatroom, including users in specific channel."""
@@ -290,17 +306,23 @@ def handle_names_command(client, parts):
         else:
             client.send(f":{server_name} 403 {client.nickname} {channel} :No such channel\r\n")
 
+
 def part_channel(client, channel_name):
     """Remove the client from a channel and notify other members."""
     with channels_lock:
         if channel_name in channels and client.nickname in channels[channel_name]:
+            # Notify other members in the channel
+            broadcast(f":{client.nickname}!{client.username}@{client.address[0]} PART {channel_name}\r\n",
+                      exclude=client)
+
+            # Remove the client from the channel
             channels[channel_name].discard(client.nickname)
             if not channels[channel_name]:
                 del channels[channel_name]
-            else:
-                broadcast(f":server NOTICE {channel_name} :{client.nickname} has left the channel\r\n", exclude=client)
             client.channels.discard(channel_name)
-            client.send(f":server NOTICE {channel_name} :You've left the channel {channel_name}\r\n")
+
+            # Send PART confirmation message to the client
+            client.send(f":{client.nickname}!{client.username}@{client.address[0]} PART {channel_name}\r\n")
             print(f"{client.nickname} left channel {channel_name}")
         else:
             client.send(f":{server_name} 442 {client.nickname} {channel_name} :You're not on that channel\r\n")
