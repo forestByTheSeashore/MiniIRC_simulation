@@ -88,11 +88,70 @@ class IRCBot:
         self.get_other_users(channel, self.name)  #Get and save user information immediately after joining the channel
 
     # Handle received messages
+    # Handle specific commands
+    def process_command(self, user, channel, command):
+        if command == "!hello":
+            self.send_command(f"PRIVMSG {channel} :Hello {user}!")
+
+        # Handle the !slap command with an optional target
+        elif command.startswith("!slap"):
+            parts = command.split()
+            if len(parts) == 1:  # No specific user provided, randomly slap someone
+                other_users = self.get_other_users(channel, user)
+                if other_users:
+                    target = random.choice(other_users)
+                    self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
+                else:
+                    self.send_command(f"PRIVMSG {channel} :No other users to slap.")
+            elif len(parts) == 2:  # A specific user is provided as a target
+                target = parts[1]
+                other_users = self.get_other_users(channel, user)
+                if target in other_users:
+                    self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
+                else:
+                    # If the target is not in the channel, slap the sender
+                    self.send_command(f"PRIVMSG {channel} :{user}, {target} is not here, so you slap yourself!")
+
+        # New command: !whois <username>
+        elif command.startswith("!whois"):
+            parts = command.split()
+            if len(parts) == 2:
+                target = parts[1]
+                self.send_command(f"WHOIS {target}")  # Use IRC WHOIS command to query user info
+            else:
+                self.send_command(f"PRIVMSG {channel} :Usage: !whois <username>")
+
+    # Handle received messages (updated to handle WHOIS response)
     def handle_message(self, message):
-        # Keeping the connection to miniircd alive, and managing it efficiently
         print(f"Received message: {message}")
         if message.startswith("PING"):
-            self.send_command(f"PONG {message.split()[1]}")  #Respond to the server's PING
+            self.send_command(f"PONG {message.split()[1]}")  # Respond to server's PING
+
+        # Handle WHOIS response (numeric reply 311 is a common response code for WHOIS)
+        elif "311" in message:
+            parts = message.split()
+            nickname = parts[3]  # This is the nickname being queried
+            username = parts[4]
+            hostname = parts[5]
+            realname = ' '.join(parts[7:])
+            response = f"{nickname} is {username}@{hostname} ({realname})"
+            self.send_command(f"PRIVMSG {self.channel} :{response}")
+
+        elif "JOIN" in message:
+            user = message.split('!')[0][1:]  # Get the username
+            channel = message.split()[2]  # Get the channel name
+            if channel in self.channel_users:
+                self.channel_users[channel].append(user)  # Add the user to the channel's user list
+            else:
+                self.channel_users[channel] = [user]  # Create a new list if the channel doesn't exist
+            print(f"{user} joined {channel}")
+
+        elif "PART" in message:
+            user = message.split('!')[0][1:]  # Get the username
+            channel = message.split()[2]  # Get the channel name
+            if channel in self.channel_users:
+                self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
+            print(f"{user} left {channel}")
 
         elif "PRIVMSG" in message:
             user = message.split('!')[0][1:]  # Get the username
@@ -102,25 +161,9 @@ class IRCBot:
             if msg_content.startswith("!"):
                 self.process_command(user, channel, msg_content.strip())
             else:
-                # Respond to private messages with a random reply
-                if channel == self.name:  # If the channel name is the bot's name, it's a private message
+                if channel == self.name:  # Private message
                     random_reply = random.choice(self.responses)
                     self.send_command(f"PRIVMSG {user} :{random_reply}")
-
-    # Handle specific commands
-    def process_command(self, user, channel, command):
-        if command == "!hello":
-            self.send_command(f"PRIVMSG {channel} :Hello {user}!")
-
-        elif command.startswith("!slap"):
-            other_users = self.get_other_users(channel, user)
-            print(other_users)
-            if other_users:
-                target = random.choice(other_users)
-
-                self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
-            else:
-                self.send_command(f"PRIVMSG {channel} :No other users to slap.")
 
     def get_other_users(self, channel, exclude_user):
         self.send_command(f"NAMES {channel}")
@@ -172,7 +215,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC bot client")
     parser.add_argument("--host", type=str, default="::1", help="Server address")
     parser.add_argument("--port", type=int, default="6667", help="Server port")
-    parser.add_argument("--name", type=str, default="SuperBot", help="Bot's nickname")
+    parser.add_argument("--name", type=str, default="bbbb", help="Bot's nickname")
     parser.add_argument("--channel", type=str, default="#hello", help="Channel to join")
 
     args = parser.parse_args()
