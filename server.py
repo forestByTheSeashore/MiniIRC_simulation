@@ -76,13 +76,16 @@ class Client:
         self.last_pong = time.time()  # Last time a PONG was received from the client
         self.channels = set()  # Set of channels the client is a member of
         self.lock = threading.Lock()  # Lock for thread-safe operations on this client
-        self.registered = False # Flag to indicate if the client has completed registration
+        self.registered = False # Flag to indicate if the client has completed 
+        self.last_activity = time.time()  # Last time the client sent a message
+        self.signon_time = time.time()  # Time when the client connected
 
     def send(self, message):
         """Send a message to the client."""
         try:
             with self.lock:
                 self.socket.sendall(message.encode('utf-8'))
+                self.last_activity = time.time()
         except Exception as e:
             print(f"Error sending message to {self.nickname}: {e}")
 
@@ -90,6 +93,7 @@ class Client:
         """Close the client's connection and remove them from all channels."""
         try:
             self.socket.close()
+            self.last_activity = time.time()
         except:
             pass
         if self.nickname:
@@ -245,6 +249,12 @@ def process_command(client, message):
         client.send(f":{server_name} QUIT :{client.nickname} has quit ({reason})\r\n")
         client.close(reason)
 
+    elif command == "WHOIS":
+        if len(parts) < 2:
+            client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
+        else:
+            handle_whois_command(client, parts[1:])
+
     else:
         client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
 
@@ -390,6 +400,40 @@ def ping_client(client):
             print(f"Error in ping_thread for {client.nickname}: {e}")
             client.close("Ping thread error")
             break
+
+def handle_whois_command(client, params):
+    """Handle the WHOIS command."""
+    if len(params) < 1:
+        client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
+        return
+
+    target_nick = params[0]
+    with clients_lock:
+        target_client = clients.get(target_nick)
+
+    if not target_client:
+        client.send(f":{server_name} 401 {client.nickname} {target_nick} :No such nick/channel\r\n")
+        return
+
+    # Send user information
+    client.send(f":{server_name} 311 {client.nickname} {target_client.nickname} {target_client.username} "
+                f"{target_client.address[0]} * :{target_client.realname}\r\n")
+
+    # Send server information
+    client.send(f":{server_name} 312 {client.nickname} {target_client.nickname} {server_name} :Server Info\r\n")
+
+    # Send channel list
+    channels_list = ' '.join(target_client.channels)
+    client.send(f":{server_name} 319 {client.nickname} {target_client.nickname} :{channels_list}\r\n")
+
+    # Send idle time and signon time
+    idle_time = int(time.time() - target_client.last_activity)
+    signon_time = int(target_client.signon_time)
+    client.send(f":{server_name} 317 {client.nickname} {target_client.nickname} {idle_time} {signon_time} "
+                f":seconds idle, signon time\r\n")
+
+    # End of WHOIS
+    client.send(f":{server_name} 318 {client.nickname} {target_client.nickname} :End of /WHOIS list.\r\n")
 
 def main():
     """Initialize and start the server, accepting and handling client connections."""
