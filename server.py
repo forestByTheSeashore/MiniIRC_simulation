@@ -338,8 +338,11 @@ def send_channel_message(sender, channel_name, message):
         if channel_name not in channels:
             sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
             return
+        if sender.nickname not in channels[channel_name]:  # 检查发送者是否在频道中
+            sender.send(f":{server_name} 442 {sender.nickname} {channel_name} :You're not on that channel\r\n")
+            return
         members = channels[channel_name].copy()
-        
+
     for member_nick in members:
         if member_nick == sender.nickname:
             continue
