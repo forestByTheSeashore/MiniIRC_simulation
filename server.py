@@ -131,8 +131,8 @@ def handle_client(client_socket, addr):
     print(f"Client connected: {addr}")
 
     # Start PING thread
-    ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
-    ping_thread.start()
+    # ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
+    # ping_thread.start()
 
     # Receive and process data from the client
     # The client should send a message based on the IRC protocol.
@@ -158,7 +158,7 @@ def handle_client(client_socket, addr):
 def process_command(client, message):
     """Process and handle IRC commands received from a client."""
     print(f"Received from {client.nickname or 'Unknown'}: {message}")
-    parts = message.split(' ', 2)
+    parts = message.split(' ')
     command = parts[0].upper()
     print(f"Command: {command}")
 
@@ -192,8 +192,12 @@ def process_command(client, message):
             client.send(f":{server_name} 461 {client.nickname} {command} :Not enough parameters\r\n")
             return
         client.username = parts[1]
+        client.realname = parts[4].lstrip(':')
         print(f"Client {client.nickname} set username to {client.username} and realname to {client.realname}")
-        if client.nickname and client.username and not hasattr(client, 'registered'):
+        print(client.nickname)
+        print(client.username)
+        print(client.registered)
+        if (client.nickname) and (client.username) and (not client.registered):
             client.registered = True
             client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
             client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
