@@ -61,7 +61,8 @@ clients = {}  # Dictionary of connected clients
 channels = {}  # Dictionary of channels and their members
 clients_lock = threading.Lock()  # Lock for accessing the clients dictionary
 channels_lock = threading.Lock()  # Lock for accessing the channels dictionary
-server_name = "socket"  # Server name for messaging
+server_name = "MyIRC"  # Server name for messaging
+server_version = "1.0"
 
 
 class Client:
@@ -199,6 +200,10 @@ def process_command(client, message):
         if client.nickname and client.username and not hasattr(client, 'registered'):
             client.registered = True
             client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
+            client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
+            client.send(f":{server_name} 003 {client.nickname} :This server is created sometime\r\n")
+            client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
+            client.send(f":{server_name} 251 {client.nickname} There are {len(clients)} users and 1 server\r\n")
             broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
     elif command == "PONG":
@@ -343,8 +348,11 @@ def send_channel_message(sender, channel_name, message):
         if channel_name not in channels:
             sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
             return
+        if sender.nickname not in channels[channel_name]:  # 检查发送者是否在频道中
+            sender.send(f":{server_name} 442 {sender.nickname} {channel_name} :You're not on that channel\r\n")
+            return
         members = channels[channel_name].copy()
-        
+
     for member_nick in members:
         if member_nick == sender.nickname:
             continue
