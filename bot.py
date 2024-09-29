@@ -87,7 +87,6 @@ class IRCBot:
         self.send_command(f"JOIN {channel}")
         self.get_other_users(channel, self.name)  #Get and save user information immediately after joining the channel
 
-    # Handle received messages
     # Handle specific commands
     def process_command(self, user, channel, command):
         if command == "!hello":
@@ -121,7 +120,11 @@ class IRCBot:
             else:
                 self.send_command(f"PRIVMSG {channel} :Usage: !whois <username>")
 
-    # Handle received messages (updated to handle WHOIS response)
+        # New command: !list to list all active channels
+        elif command == "!list":
+            self.send_command("LIST")  # Send the LIST command to the IRC server
+
+    # Handle received messages (updated to handle LIST response)
     def handle_message(self, message):
         print(f"Received message: {message}")
         if message.startswith("PING"):
@@ -135,6 +138,15 @@ class IRCBot:
             hostname = parts[5]
             realname = ' '.join(parts[7:])
             response = f"{nickname} is {username}@{hostname} ({realname})"
+            self.send_command(f"PRIVMSG {self.channel} :{response}")
+
+        # Handle LIST response (numeric reply 322 is for a channel information)
+        elif "322" in message:  # '322' is a numeric reply for LIST response
+            parts = message.split()
+            channel_name = parts[3]
+            user_count = parts[4]
+            topic = ' '.join(parts[5:])
+            response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
             self.send_command(f"PRIVMSG {self.channel} :{response}")
 
         elif "JOIN" in message:
@@ -215,7 +227,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="IRC bot client")
     parser.add_argument("--host", type=str, default="::1", help="Server address")
     parser.add_argument("--port", type=int, default="6667", help="Server port")
-    parser.add_argument("--name", type=str, default="bbbb", help="Bot's nickname")
+    parser.add_argument("--name", type=str, default="SuperBot", help="Bot's nickname")
     parser.add_argument("--channel", type=str, default="#hello", help="Channel to join")
 
     args = parser.parse_args()
@@ -237,4 +249,3 @@ if __name__ == "__main__":
         bot.stop()
         thread.join()
         print("\nExiting client")
-
