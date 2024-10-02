@@ -75,16 +75,117 @@ class IRCBot:
         self.send_command(f"NICK {self.name}")  # Send the bot's nickname
         self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
         self.join_channel(self.channel)
-
+        
     # Send a command to the IRC server
-    def send_command(self, command):
+    def send_message(self,command):
         print(f"Sending: {command}")
         self.socket.send((command + "\r\n").encode())  # Send the command to the server
+
+    # Run a thread to send the command
+    def send_command(self, command):
+        send_thread = threading.Thread(target=self.send_message, args=(command,))
+        send_thread.start()
 
     # Join a channel and fetch the user list
     def join_channel(self, channel):
         self.send_command(f"JOIN {channel}")
         self.get_other_users(channel, self.name)  # Get and save user information after joining the channel
+
+   
+    # Handle incoming messages from the server
+    def handle_message(self, message):
+        print(f"Received message: {message}")
+        if message.startswith("PING"):  # Handle server PING
+            self.send_command(f"PONG {message.split()[1]}")  # Respond to the PING to keep the connection alive
+            return
+        components = message.split()
+        prefix = components[0]
+        command = components[1]
+        params = components[2:-1]
+        content = components[-1]
+        
+        
+
+        user = prefix.split('!')[0][1:]  # Extract the username
+
+        if user == self.name:  # Ignore messages from the bot itself
+            return
+
+        if command == "NICK":  # Handle nickname changes
+           self.update_nickname(prefix,content)
+
+        # Handle WHOIS response (numeric reply 311 is a common response code for WHOIS)
+        elif command == "311" :
+            self.handle_whois(params,content)
+
+        # Handle LIST response (numeric reply 322 is for a channel information)
+        elif command == "322":  # '322' is a numeric reply for LIST response
+            self.handle_channelInfo(params)
+
+        elif command == "JOIN":  # Handle user joining a channel
+            self.handle_join(prefix,params)
+
+        elif command == "PART":  # Handle user leaving a channel
+            self.handle_part(prefix,params)
+
+        elif command == "PRIVMSG":  # Handle private messages and channel messages
+            self.handle_primsg(message)
+
+    def update_nickname(self,prefix,content):
+        old_nick = prefix.split('!')[0][1:]  # Old nickname
+        new_nick = content.strip()  # New nickname
+
+        print(f"{old_nick} changed their nickname to {new_nick}")
+
+        # Update the user list for all channels the user is in
+        for channel, users in self.channel_users.items():
+            if old_nick in users:
+                users.remove(old_nick)
+                users.append(new_nick)
+                print(f"Updated {channel} user list: {self.channel_users[channel]}")
+                
+    def handle_whois(self,params,content):
+        nickname = params[1]  # Nickname being queried
+        username = params[2]
+        hostname = params[3]
+        realname =  content.strip(":")
+        response = f"{nickname} is {username}@{hostname} ({realname})"
+        self.send_command(f"PRIVMSG {self.channel} :{response}")
+        
+    def handle_channelInfo(self,params):
+        channel_name = params[1]
+        user_count = params[2]
+        topic = ' '.join(params[3:])
+        response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
+        self.send_command(f"PRIVMSG {self.channel} :{response}")
+        
+    def handle_join(self,prefix,content):
+        user = prefix.split('!')[0][1:]  # Extract the username
+        channel = content  # Extract the channel name
+        if channel in self.channel_users:
+            self.channel_users[channel].append(user)  # Add the user to the channel's user list
+        else:
+            self.channel_users[channel] = [user]  # Create a new list if the channel doesn't exist
+        print(f"{user} joined {channel}")
+
+    def handle_part(self,prefix,params):
+        user = prefix.split('!')[0][1:]  # Extract the username
+        channel = params[0]  # Extract the channel name
+        if channel in self.channel_users:
+            self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
+        print(f"{user} left {channel}")
+
+    def handle_primsg(self,message):
+        user = message.split('!')[0][1:]  # Extract the username
+        channel = message.split()[2]  # Extract the channel name
+        msg_content = message.split(f"PRIVMSG {channel} :")[1]
+
+        if msg_content.startswith("!"):  # Handle commands starting with '!'
+            self.process_command(user, channel, msg_content.strip())
+        else:
+            if channel == self.name:  # Private message case
+                random_reply = random.choice(self.responses)
+                self.send_command(f"PRIVMSG {user} :{random_reply}")
 
     # Process specific commands received from users
     def process_command(self, user, channel, command):
@@ -139,78 +240,6 @@ class IRCBot:
                 self.send_command(f"PRIVMSG {user} :Listing all active channels ")
             else:
                 self.send_command("LIST")  # Send the LIST command to the server
-
-    # Handle incoming messages from the server
-    def handle_message(self, message):
-        print(f"Received message: {message}")
-        if message.startswith("PING"):  # Handle server PING
-            self.send_command(f"PONG {message.split()[1]}")  # Respond to the PING to keep the connection alive
-
-        user = message.split('!')[0][1:]  # Extract the username
-
-        if user == self.name:  # Ignore messages from the bot itself
-            return
-
-        if "NICK" in message:  # Handle nickname changes
-            old_nick = message.split('!')[0][1:]  # Old nickname
-            new_nick = message.split('NICK')[-1].strip()  # New nickname
-
-            print(f"{old_nick} changed their nickname to {new_nick}")
-
-            # Update the user list for all channels the user is in
-            for channel, users in self.channel_users.items():
-                if old_nick in users:
-                    users.remove(old_nick)
-                    users.append(new_nick)
-                    print(f"Updated {channel} user list: {self.channel_users[channel]}")
-
-        # Handle WHOIS response (numeric reply 311 is a common response code for WHOIS)
-        elif "311" in message:
-            parts = message.split()
-            nickname = parts[3]  # Nickname being queried
-            username = parts[4]
-            hostname = parts[5]
-            realname = ' '.join(parts[7:])
-            response = f"{nickname} is {username}@{hostname} ({realname})"
-            self.send_command(f"PRIVMSG {self.channel} :{response}")
-
-        # Handle LIST response (numeric reply 322 is for a channel information)
-        elif "322" in message:  # '322' is a numeric reply for LIST response
-            parts = message.split()
-            channel_name = parts[3]
-            user_count = parts[4]
-            topic = ' '.join(parts[5:])
-            response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
-            self.send_command(f"PRIVMSG {self.channel} :{response}")
-
-        elif "JOIN" in message:  # Handle user joining a channel
-            user = message.split('!')[0][1:]  # Extract the username
-            channel = message.split()[2]  # Extract the channel name
-            if channel in self.channel_users:
-                self.channel_users[channel].append(user)  # Add the user to the channel's user list
-            else:
-                self.channel_users[channel] = [user]  # Create a new list if the channel doesn't exist
-            print(f"{user} joined {channel}")
-
-        elif "PART" in message:  # Handle user leaving a channel
-            user = message.split('!')[0][1:]  # Extract the username
-            channel = message.split()[2]  # Extract the channel name
-            if channel in self.channel_users:
-                self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
-            print(f"{user} left {channel}")
-
-        elif "PRIVMSG" in message:  # Handle private messages and channel messages
-            user = message.split('!')[0][1:]  # Extract the username
-            channel = message.split()[2]  # Extract the channel name
-            msg_content = message.split(f"PRIVMSG {channel} :")[1]
-
-            if msg_content.startswith("!"):  # Handle commands starting with '!'
-                self.process_command(user, channel, msg_content.strip())
-            else:
-                if channel == self.name:  # Private message case
-                    random_reply = random.choice(self.responses)
-                    self.send_command(f"PRIVMSG {user} :{random_reply}")
-
 
     # Fetch the list of other users in the channel, excluding the bot itself
     def get_other_users(self, channel, exclude_user):
