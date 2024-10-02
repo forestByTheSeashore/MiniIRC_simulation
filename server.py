@@ -145,14 +145,15 @@ def handle_client(client_socket, addr):
             try:
                 data = client.socket.recv(BUFFER_SIZE)
                 if not data:
-                    print(f"No data received. Closing connection for {client.nickname}")
+                    print(f"No data received. Closing connection for {client.nickname or 'Guest'}")
                     break
                 messages = data.decode('utf-8').strip().split('\r\n')
                 for message in messages:
                     if message:
                         process_command(client, message)
             except socket.timeout:
-                continue
+                print(f"Client {client.nickname} timed out due to inactivity.")
+                break
             except Exception as e:
                 print(f"Error receiving data from {client.nickname}: {e}")
                 break
@@ -161,7 +162,7 @@ def handle_client(client_socket, addr):
 
 def process_command(client, message):
     """Process and handle IRC commands received from a client."""
-    print(f"Received from {client.nickname or 'Unknown'}: {message}")
+    print(f"Received from {client.nickname or 'Guest'}: {message}")
     parts = message.split(' ')
     command = parts[0].upper()
     print(f"Command: {command}")
@@ -450,7 +451,7 @@ def main():
         while True:
             try:
                 client_socket, addr = server_socket.accept()
-                client_socket.settimeout(None)  # Set to blocking mode
+                client_socket.settimeout(60)  # Set to blocking mode
                 client_thread = threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True)
                 client_thread.start()
             except socket.timeout:
