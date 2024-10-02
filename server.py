@@ -283,7 +283,8 @@ def handle_cap_command(client, parts):
         client.send(f":{server_name} 410 {client.nickname} :Invalid CAP subcommand\r\n")
 
 def join_channel(client, channel_name):
-    """Add the client to a channel and notify other members."""
+    """ To handle the operation of joining the object channel after "JOIN" is received.
+    Add the client to a channel and notify other members."""
     with channels_lock:
         if channel_name not in channels:
             channels[channel_name] = set()
@@ -310,7 +311,8 @@ def join_channel(client, channel_name):
     print(f"Current channel {channel_name}: {channels[channel_name]}")
 
 def handle_names_command(client, parts):
-    """Send message of the user's name list in the chatroom, including users in specific channel."""
+    """To handle the operation of sending each name of the current channel's users after "NAMES" is received.
+    Send message of the user's name list in the chatroom, including users in specific channel."""
     if len(parts) < 2:
         # if no channels, return all the user lists
         for channel in channels:
@@ -328,7 +330,8 @@ def handle_names_command(client, parts):
 
 
 def part_channel(client, channel_name):
-    """Remove the client from a channel and notify other members."""
+    """To handle the operation of leaving the object channel after "PART" is received.
+    Remove the client from a channel and notify other members."""
     with channels_lock:
         if channel_name in channels and client.nickname in channels[channel_name]:
             # Notify other members in the channel
@@ -348,7 +351,8 @@ def part_channel(client, channel_name):
             client.send(f":{server_name} 442 {client.nickname} {channel_name} :You're not on that channel\r\n")
 
 def send_channel_message(sender, channel_name, message):
-    """Send a message to all members of a channel."""
+    """To handle the operation of sending message to the object channel after "PRIVMSG" is received and the second argument start with "#".
+    Send a message to all members of a channel."""
     with channels_lock:
         if channel_name not in channels:
             sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
@@ -371,7 +375,8 @@ def send_channel_message(sender, channel_name, message):
     print(f"{sender.nickname} sent message to {channel_name}: {message}")
 
 def send_private_message(sender, target_nick, message):
-    """Send a private message to a specific client."""
+    """To handle the operation of sending private message to the object client after "PRIVMSG" is received.
+    Send a private message to a specific client."""
     with clients_lock:
         target_client = clients.get(target_nick)
     if target_client:
@@ -385,7 +390,7 @@ def send_private_message(sender, target_nick, message):
         sender.send(f"ERROR :{target_nick} is offline\r\n")
 
 def ping_client(client):
-    """Periodically send PING messages to the client and check for responses."""
+    """Periodically send PING messages to the client and check for responses in order to insure the connection is maintained."""
     while True:
         time.sleep(PING_INTERVAL)
         try:
@@ -403,7 +408,7 @@ def ping_client(client):
             break
 
 def handle_whois_command(client, params):
-    """Handle the WHOIS command."""
+    """Handle the WHOIS command when 'WHOIS' is received."""
     if len(params) < 1:
         client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
         return
