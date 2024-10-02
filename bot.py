@@ -134,7 +134,8 @@ class IRCBot:
     # Join a channel and fetch the user list
     def join_channel(self, channel):
         self.send_command(f"JOIN {channel}")
-        self.get_other_users(channel, self.name)  # Get and save user information after joining the channel
+        self.get_users(channel)  # Get and save user information after joining the channel
+        print(f"user_list: {self.channel_users}")
 
     # Process specific commands received from users
     def process_command(self, user, channel, command):
@@ -263,8 +264,7 @@ class IRCBot:
                     random_reply = random.choice(self.responses)  # Random reply from facts list
                     self.send_command(f"PRIVMSG {user} :{random_reply}")  # Send the reply
 
-    # Fetch the list of other users in the channel, excluding the bot itself
-    def get_other_users(self, channel, exclude_user):
+    def get_users(self,channel):
         self.send_command(f"NAMES {channel}")  # Send NAMES command to get user list
         response = self.socket.recv(2048).decode("utf-8")  # Receive server response
         user_list = []
@@ -272,15 +272,17 @@ class IRCBot:
         # Parse the response to the NAMES command
         for line in response.split("\r\n"):
             if "353" in line:  # '353' is a response code for the NAMES command
-                users = line.split(':')[-1].strip().split()  # Extract usernames
-                for user in users:
-                    if user != exclude_user and user != self.name and user not in user_list:
-                        user_list.append(user)
-
-        # Save the user list for the channel
+                user_list = line.split(':')[-1].strip().split()  # Extract usernames
         self.channel_users[channel] = user_list
-        print(f"user_list of {channel}: {user_list}")
         return user_list
+    # Fetch the list of other users in the channel, excluding the bot itself
+    def get_other_users(self, channel, exclude_user):
+       users=self.get_users(channel)
+       user_list=[]
+       for user in users:
+            if user != exclude_user and user != self.name and user not in user_list:
+                user_list.append(user)
+       return user_list
 
     # Main loop to continuously receive and process messages
     def run(self):
