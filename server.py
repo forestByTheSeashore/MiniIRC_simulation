@@ -135,8 +135,8 @@ def handle_client(client_socket, addr):
     print(f"Client connected: {addr}")
 
     # Start PING thread
-    # ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
-    # ping_thread.start()
+    ping_thread = threading.Thread(target=ping_client, args=(client,), daemon=True)
+    ping_thread.start()
 
     # Receive and process data from the client
     # The client should send a message based on the IRC protocol.
