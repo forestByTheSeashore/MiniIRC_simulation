@@ -42,6 +42,7 @@ import socket
 import random
 import argparse
 import threading
+import os
 
 
 
@@ -58,23 +59,34 @@ class IRCBot:
         # Set a reasonable timeout and handle errors
         self.socket.settimeout(300)
         self.running = True  # Used to control the main loop
-        self.responses = ["Some people said the world would end in 2021.",
-                          "Central South University is the best university in the world.",
-                          "I wish everyone a bright future.",
-                          "When is the holiday?",
-                          "Hello, I am a very powerful intelligent robot.",
-                          "There was a piece of bread, and as it was walking, it got hungry and ate itself.",
-                          "The passionate young man scalded the vampire's mouth full of blisters."]
+        self.responses = self.load_facts()
         # Initialize a dictionary to store users in each channel
         self.channel_users = {}
 
+    def load_facts(self):
+        facts_file = "facts.txt"
+        facts = []
+        if os.path.exists(facts_file):
+            with open(facts_file, "r", encoding="utf-8") as f:
+                facts = f.read().splitlines()  #
+        else:
+            print(f"{facts_file} File not found.")
+        return facts
+
     # Connect to the server and join the channel, ensuring the bot identifies itself properly
     def connect(self):
-        print(f"Connecting to server {self.server}...")
-        self.socket.connect((self.server, self.port, 0, 0))  # Connect to the server with IPv6
-        self.send_command(f"NICK {self.name}")  # Send the bot's nickname
-        self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
-        self.join_channel(self.channel)
+        while True:
+            try:
+                print(f"Connecting to server {self.server}...")
+                self.socket.connect((self.server, self.port, 0, 0))  # Connect to the server with IPv6
+                self.send_command(f"NICK {self.name}")  # Send the bot's nickname
+                self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
+                self.join_channel(self.channel)
+                break  # Connection successful, exit the loop.
+            except (socket.error, socket.gaierror) as e:
+                print(f"Network connection error: Unable to connect because the target machine actively refused the connection.")
+                self.server = input("Please enter the correct server address: ")
+                self.port = int(input("Please enter the correct port number: "))
 
     # Send a command to the IRC server
     def send_command(self, command):
