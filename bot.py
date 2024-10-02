@@ -235,7 +235,7 @@ class IRCBot:
             if "353" in line:  # '353' is a response code for the NAMES command
                 users = line.split(':')[-1].strip().split()  # Extract usernames
                 for user in users:
-                    if user != exclude_user and user != self.name:
+                    if user != exclude_user and user != self.name and user not in user_list:
                         user_list.append(user)
 
         # Save the user list for the channel
