@@ -58,15 +58,19 @@ class IRCBot:
         # Set a reasonable timeout and handle errors
         self.socket.settimeout(300)
         self.running = True  # Used to control the main loop
-        self.responses = ["Some people said the world would end in 2021.",
-                          "Central South University is the best university in the world.",
-                          "I wish everyone a bright future.",
-                          "When is the holiday?",
-                          "Hello, I am a very powerful intelligent robot.",
-                          "There was a piece of bread, and as it was walking, it got hungry and ate itself.",
-                          "The passionate young man scalded the vampire's mouth full of blisters."]
+        self.responses = self.load_facts()
         # Initialize a dictionary to store users in each channel
         self.channel_users = {}
+
+    def load_facts(self):
+        facts_file = "facts.txt"
+        facts = []
+        if os.path.exists(facts_file):
+            with open(facts_file, "r", encoding="utf-8") as f:
+                facts = f.read().splitlines()  #
+        else:
+            print(f"{facts_file} File not found.")
+        return facts
 
     # Connect to the server and join the channel, ensuring the bot identifies itself properly
     def connect(self):
@@ -75,7 +79,7 @@ class IRCBot:
         self.send_command(f"NICK {self.name}")  # Send the bot's nickname
         self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
         self.join_channel(self.channel)
-        
+
     # Send a command to the IRC server
     def send_message(self,command):
         print(f"Sending: {command}")
@@ -252,7 +256,7 @@ class IRCBot:
             if "353" in line:  # '353' is a response code for the NAMES command
                 users = line.split(':')[-1].strip().split()  # Extract usernames
                 for user in users:
-                    if user != exclude_user and user != self.name:
+                    if user != exclude_user and user != self.name and user not in user_list:
                         user_list.append(user)
 
         # Save the user list for the channel
