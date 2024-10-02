@@ -62,6 +62,8 @@ class IRCBot:
         self.responses = self.load_facts()
         # Initialize a dictionary to store users in each channel
         self.channel_users = {}
+        self.server_info={}
+
 
     def load_facts(self):
         facts_file = "facts.txt"
@@ -73,6 +75,33 @@ class IRCBot:
             print(f"{facts_file} File not found.")
         return facts
 
+        # Handle initial server messages and save them to self.server_info
+    def handle_initial_server_message(self, message):
+        parts = message.split()  # Split the message into components
+        if len(parts) < 2:
+            return  # Skip if message is malformed or incomplete
+
+        # Handle different numeric replies for initial server info
+        if "001" in parts[1]:  # Welcome message
+            self.server_info["welcome"] = message.split(":", 2)[-1]
+            print(f"Welcome: {self.server_info['welcome']}")
+        elif "002" in parts[1]:  # Host information
+            self.server_info["host"] = message.split(":", 2)[-1]
+            print(f"Host: {self.server_info['host']}")
+        elif "003" in parts[1]:  # Server creation information
+            self.server_info["creation"] = message.split(":", 2)[-1]
+            print(f"Creation: {self.server_info['creation']}")
+        elif "004" in parts[1]:  # Server and version details
+            self.server_info["version"] = parts[3:5]  # Server name and version
+            print(f"Version: {self.server_info['version']}")
+        elif "251" in parts[1]:  # Server user statistics
+            self.server_info["user_stats"] = message.split(":", 2)[-1]
+            print(f"User stats: {self.server_info['user_stats']}")
+        elif "422" in parts[1]:  # MOTD missing
+            self.server_info["motd"] = "MOTD is missing"
+            print(f"MOTD: {self.server_info['motd']}")
+
+
     # Connect to the server and join the channel, ensuring the bot identifies itself properly
     def connect(self):
         while True:
@@ -81,10 +110,19 @@ class IRCBot:
                 self.socket.connect((self.server, self.port, 0, 0))  # Connect to the server with IPv6
                 self.send_command(f"NICK {self.name}")  # Send the bot's nickname
                 self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
+
+                # Capture initial server messages right after connection
+                initial_response = self.socket.recv(2048).decode("utf-8")
+                if initial_response:
+                    for line in initial_response.strip().split("\r\n"):
+                        self.handle_initial_server_message(line)  # Process initial server messages
+
+                # Now join the channel after processing the initial responses
                 self.join_channel(self.channel)
                 break  # Connection successful, exit the loop.
             except (socket.error, socket.gaierror) as e:
-                print(f"Network connection error: Unable to connect because the target machine actively refused the connection.")
+                print(
+                    f"Network connection error: Unable to connect because the target machine actively refused the connection.")
                 self.server = input("Please enter the correct server address: ")
                 self.port = int(input("Please enter the correct port number: "))
 
@@ -135,7 +173,6 @@ class IRCBot:
                         self.send_command(f"PRIVMSG {user} :{target} is not here, so you slap yourself!")
                     else:
                         self.send_command(f"PRIVMSG {channel} :{user}, {target} is not satisfied, so you slap yourself!")
-
         # Handle the !whois command
         elif command.startswith("!whois"):
             parts = command.split()
@@ -155,17 +192,15 @@ class IRCBot:
     # Handle incoming messages from the server
     def handle_message(self, message):
         print(f"Received message: {message}")
-        if message.startswith("PING"):  # Handle server PING
-            self.send_command(f"PONG {message.split()[1]}")  # Respond to the PING to keep the connection alive
 
-        user = message.split('!')[0][1:]  # Extract the username
+        # Respond to PING to keep the connection alive
+        if message.startswith("PING"):
+            self.send_command(f"PONG {message.split()[1]}")
 
-        if user == self.name:  # Ignore messages from the bot itself
-            return
-
-        if "NICK" in message:  # Handle nickname changes
-            old_nick = message.split('!')[0][1:]  # Old nickname
-            new_nick = message.split('NICK')[-1].strip()  # New nickname
+        # Handle nickname changes
+        if "NICK" in message:
+            old_nick = message.split('!')[0][1:]  # Extract the old nickname
+            new_nick = message.split('NICK')[-1].strip()  # Extract the new nickname
 
             print(f"{old_nick} changed their nickname to {new_nick}")
 
@@ -176,26 +211,29 @@ class IRCBot:
                     users.append(new_nick)
                     print(f"Updated {channel} user list: {self.channel_users[channel]}")
 
-        # Handle WHOIS response (numeric reply 311 is a common response code for WHOIS)
+        # Handle WHOIS response (numeric reply 311)
         elif "311" in message:
             parts = message.split()
-            nickname = parts[3]  # Nickname being queried
-            username = parts[4]
-            hostname = parts[5]
-            realname = ' '.join(parts[7:])
-            response = f"{nickname} is {username}@{hostname} ({realname})"
-            self.send_command(f"PRIVMSG {self.channel} :{response}")
+            if len(parts) >= 8:  # Ensure the message has enough parts
+                nickname = parts[3]  # Extract the queried nickname
+                username = parts[4]
+                hostname = parts[5]
+                realname = ' '.join(parts[7:])  # Real name might be spread across multiple parts
+                response = f"{nickname} is {username}@{hostname} ({realname})"
+                self.send_command(f"PRIVMSG {self.channel} :{response}")
 
-        # Handle LIST response (numeric reply 322 is for a channel information)
-        elif "322" in message:  # '322' is a numeric reply for LIST response
+        # Handle LIST response (numeric reply 322)
+        elif "322" in message:
             parts = message.split()
-            channel_name = parts[3]
-            user_count = parts[4]
-            topic = ' '.join(parts[5:])
-            response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
-            self.send_command(f"PRIVMSG {self.channel} :{response}")
+            if len(parts) >= 6:  # Ensure the message contains enough segments
+                channel_name = parts[3]  # Extract channel name
+                user_count = parts[4]  # Extract the number of users in the channel
+                topic = ' '.join(parts[5:])  # Extract the channel topic
+                response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
+                self.send_command(f"PRIVMSG {self.channel} :{response}")
 
-        elif "JOIN" in message:  # Handle user joining a channel
+        # Handle user joining a channel
+        elif "JOIN" in message:
             user = message.split('!')[0][1:]  # Extract the username
             channel = message.split()[2]  # Extract the channel name
             if channel in self.channel_users:
@@ -204,25 +242,26 @@ class IRCBot:
                 self.channel_users[channel] = [user]  # Create a new list if the channel doesn't exist
             print(f"{user} joined {channel}")
 
-        elif "PART" in message:  # Handle user leaving a channel
+        # Handle user leaving a channel
+        elif "PART" in message:
             user = message.split('!')[0][1:]  # Extract the username
             channel = message.split()[2]  # Extract the channel name
             if channel in self.channel_users:
                 self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
             print(f"{user} left {channel}")
 
-        elif "PRIVMSG" in message:  # Handle private messages and channel messages
+        # Handle private messages and channel messages
+        elif "PRIVMSG" in message:
             user = message.split('!')[0][1:]  # Extract the username
             channel = message.split()[2]  # Extract the channel name
-            msg_content = message.split(f"PRIVMSG {channel} :")[1]
+            msg_content = message.split(f"PRIVMSG {channel} :")[1]  # Extract the message content
 
             if msg_content.startswith("!"):  # Handle commands starting with '!'
-                self.process_command(user, channel, msg_content.strip())
+                self.process_command(user, channel, msg_content.strip())  # Process command
             else:
-                if channel == self.name:  # Private message case
-                    random_reply = random.choice(self.responses)
-                    self.send_command(f"PRIVMSG {user} :{random_reply}")
-
+                if channel == self.name:  # Handle private messages
+                    random_reply = random.choice(self.responses)  # Random reply from facts list
+                    self.send_command(f"PRIVMSG {user} :{random_reply}")  # Send the reply
 
     # Fetch the list of other users in the channel, excluding the bot itself
     def get_other_users(self, channel, exclude_user):
@@ -240,7 +279,7 @@ class IRCBot:
 
         # Save the user list for the channel
         self.channel_users[channel] = user_list
-        print(f"user_list: {user_list}")
+        print(f"user_list of {channel}: {user_list}")
         return user_list
 
     # Main loop to continuously receive and process messages
@@ -250,8 +289,9 @@ class IRCBot:
                 # Receive data from the socket
                 response = self.socket.recv(2048).decode("utf-8")
                 if response:
-                    for line in response.strip().split("\r\n"):  # Split the message into multiple lines
-                        self.handle_message(line)  # Handle each message
+                    # Split the message into lines and handle each one
+                    for line in response.strip().split("\r\n"):
+                        self.handle_message(line)  # Call the handle_message method for each line
             except socket.timeout:
                 print("Connection timeout.")
                 break
