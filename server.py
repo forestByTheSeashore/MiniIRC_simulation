@@ -167,97 +167,113 @@ def process_command(client, message):
     command = parts[0].upper()
     print(f"Command: {command}")
 
-    # Handle the command based on the IRC protocol
-    # Send error message based on IRC protocal, with server_name, error_code, target, and error_message
+    # Dispatch command to specific handler
     if command == 'CAP':
         handle_cap_command(client, parts)
-
     elif command == "NICK":
-        if len(parts) < 2:
-            client.send(f":{server_name} 431 * :No nickname given\r\n")
-            return
-        new_nick = parts[1]
-        if not validate_nickname(new_nick):
-            client.send(f":{server_name} 432 * {new_nick} :Erroneous nickname\r\n")
-            return
-        with clients_lock:
-            if new_nick in clients:
-                client.send(f":{server_name} 433 * {new_nick} :Nickname is already in use\r\n")
-                return
-            old_nick = client.nickname
-            client.nickname = new_nick
-            clients[new_nick] = client
-            if old_nick and old_nick in clients:
-                del clients[old_nick]
-        client.send(f":{server_name} 001 {new_nick} :Nickname set to {new_nick}\r\n")
-        print(f"Client set nickname to {new_nick}")
-
+        handle_nick_command(client, parts)
     elif command == "USER":
-        if len(parts) < 2:
-            client.send(f":{server_name} 461 {client.nickname} {command} :Not enough parameters\r\n")
-            return
-        client.username = parts[1]
-        client.realname = parts[4].lstrip(':')
-        print(f"Client {client.nickname} set username to {client.username} and realname to {client.realname}")
-        print(client.nickname)
-        print(client.username)
-        print(client.registered)
-        if (client.nickname) and (client.username) and (not client.registered):
-            client.registered = True
-            client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
-            client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
-            client.send(f":{server_name} 003 {client.nickname} :This server is created sometime\r\n")
-            client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
-            client.send(f":{server_name} 251 {client.nickname} There are {len(clients)} users and 1 server\r\n")
-            broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
-
+        handle_user_command(client, parts)
     elif command == "PONG":
-        client.last_pong = time.time()
-        print(f"Received PONG from {client.nickname}")
-
+        handle_pong_command(client)
     elif command == "JOIN":
-        if len(parts) < 2:
-            client.send(f":{server_name} 461 {client.nickname} JOIN :Not enough parameters\r\n")
-            return
-        channel_name = parts[1]
-        if not channel_name.startswith("#"):
-            client.send(f":{server_name} 476 {client.nickname} {channel_name} :Bad channel mask\r\n")
-            return
-        join_channel(client, channel_name)
-
+        handle_join_command(client, parts)
     elif command == "PART":
-        if len(parts) < 2:
-            client.send(f":{server_name} 461 {client.nickname} PART :Not enough parameters\r\n")
-            return
-        channel_name = parts[1]
-        part_channel(client, channel_name)
-
+        handle_part_command(client, parts)
     elif command == "PRIVMSG":
-        if len(parts) < 3:
-            client.send(f":{server_name} 461 {client.nickname} PRIVMSG :Not enough parameters\r\n")
-            return
-        target, msg = parts[1], parts[2].lstrip(':')
-        if target.startswith("#"):
-            send_channel_message(client, target, msg)
-        else:
-            send_private_message(client, target, msg)
-
+        handle_privmsg_command(client, parts)
     elif command == "NAMES":
         handle_names_command(client, parts)
-
     elif command == "QUIT":
-        reason = parts[1].lstrip(':') if len(parts) > 1 else "Client Quit"
-        client.send(f":{server_name} QUIT :{client.nickname} has quit ({reason})\r\n")
-        client.close(reason)
-
+        handle_quit_command(client, parts)
     elif command == "WHOIS":
-        if len(parts) < 2:
-            client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
-        else:
-            handle_whois_command(client, parts[1:])
-
+        handle_whois_command(client, parts)
     else:
-        client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
+        handle_unknown_command(client, command)
+
+def handle_nick_command(client, parts):
+    if len(parts) < 2:
+        client.send(f":{server_name} 431 * :No nickname given\r\n")
+        return
+    new_nick = parts[1]
+    if not validate_nickname(new_nick):
+        client.send(f":{server_name} 432 * {new_nick} :Erroneous nickname\r\n")
+        return
+    with clients_lock:
+        if new_nick in clients:
+            client.send(f":{server_name} 433 * {new_nick} :Nickname is already in use\r\n")
+            return
+        old_nick = client.nickname
+        client.nickname = new_nick
+        clients[new_nick] = client
+        if old_nick and old_nick in clients:
+            del clients[old_nick]
+    client.send(f":{server_name} 001 {new_nick} :Nickname set to {new_nick}\r\n")
+    print(f"Client set nickname to {new_nick}")
+
+def handle_user_command(client, parts):
+    if len(parts) < 5:
+        client.send(f":{server_name} 461 {client.nickname} USER :Not enough parameters\r\n")
+        return
+    client.username = parts[1]
+    client.realname = parts[4].lstrip(':')
+    print(f"Client {client.nickname} set username to {client.username} and realname to {client.realname}")
+    if client.nickname and client.username and not client.registered:
+        client.registered = True
+        send_registration_welcome(client)
+
+def handle_pong_command(client):
+    client.last_pong = time.time()
+    print(f"Received PONG from {client.nickname}")
+
+def handle_join_command(client, parts):
+    if len(parts) < 2:
+        client.send(f":{server_name} 461 {client.nickname} JOIN :Not enough parameters\r\n")
+        return
+    channel_name = parts[1]
+    if not channel_name.startswith("#"):
+        client.send(f":{server_name} 476 {client.nickname} {channel_name} :Bad channel mask\r\n")
+        return
+    join_channel(client, channel_name)
+
+def handle_part_command(client, parts):
+    if len(parts) < 2:
+        client.send(f":{server_name} 461 {client.nickname} PART :Not enough parameters\r\n")
+        return
+    channel_name = parts[1]
+    part_channel(client, channel_name)
+
+def handle_privmsg_command(client, parts):
+    if len(parts) < 3:
+        client.send(f":{server_name} 461 {client.nickname} PRIVMSG :Not enough parameters\r\n")
+        return
+    target, msg = parts[1], parts[2].lstrip(':')
+    if target.startswith("#"):
+        send_channel_message(client, target, msg)
+    else:
+        send_private_message(client, target, msg)
+
+def handle_quit_command(client, parts):
+    reason = parts[1].lstrip(':') if len(parts) > 1 else "Client Quit"
+    client.send(f":{server_name} QUIT :{client.nickname} has quit ({reason})\r\n")
+    client.close(reason)
+
+def handle_whois_command(client, parts):
+    if len(parts) < 2:
+        client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
+    else:
+        handle_whois(client, parts[1:])
+
+def handle_unknown_command(client, command):
+    client.send(f":{server_name} 421 {client.nickname} {command} :Unknown command\r\n")
+
+def send_registration_welcome(client):
+    client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
+    client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
+    client.send(f":{server_name} 003 {client.nickname} :This server is created sometime\r\n")
+    client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
+    client.send(f":{server_name} 251 {client.nickname} There are {len(clients)} users and 1 server\r\n")
+    broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
 def handle_cap_command(client, parts):
     """Handle the cap command, to tell the client the capability the server has."""
