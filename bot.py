@@ -42,6 +42,7 @@ import socket
 import random
 import argparse
 import threading
+import os
 
 
 
@@ -109,7 +110,6 @@ class IRCBot:
         content = components[-1]
         
         
-
         user = prefix.split('!')[0][1:]  # Extract the username
 
         if user == self.name:  # Ignore messages from the bot itself
@@ -127,7 +127,7 @@ class IRCBot:
             self.handle_channelInfo(params)
 
         elif command == "JOIN":  # Handle user joining a channel
-            self.handle_join(prefix,params)
+            self.handle_join(prefix,content)
 
         elif command == "PART":  # Handle user leaving a channel
             self.handle_part(prefix,params)
