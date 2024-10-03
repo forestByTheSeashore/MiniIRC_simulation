@@ -320,15 +320,33 @@ def handle_quit_command(client, parts):
     client.close(reason)  # Clean up and close the client's connection.
 
 def handle_whois_command(client, parts):
-    """Handle the WHOIS command, which requests detailed information about a specific user.
-
-    If no nickname is provided, the server responds with an error.
-    Otherwise, the server sends information about the specified user.
-    """
+    """Handle the WHOIS command when 'WHOIS' is received."""
     if len(parts) < 2:
         client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
-    else:
-        handle_whois(client, parts[1:])  # Forward to a function that handles the detailed WHOIS query.
+        return
+
+    target_nick = parts[1]
+    with clients_lock:
+        target_client = clients.get(target_nick)
+
+    if not target_client:
+        client.send(f":{server_name} 401 {client.nickname} {target_nick} :No such nick/channel\r\n")
+        return
+
+    client.send(f":{server_name} 311 {client.nickname} {target_client.nickname} {target_client.username} "
+                f"{target_client.address[0]} * :{target_client.realname}\r\n")
+
+    client.send(f":{server_name} 312 {client.nickname} {target_client.nickname} {server_name} :Server Info\r\n")
+
+    channels_list = ' '.join(target_client.channels)
+    client.send(f":{server_name} 319 {client.nickname} {target_client.nickname} :{channels_list}\r\n")
+
+    idle_time = int(time.time() - target_client.last_activity)
+    signon_time = int(target_client.signon_time)
+    client.send(f":{server_name} 317 {client.nickname} {target_client.nickname} {idle_time} {signon_time} "
+                f":seconds idle, signon time\r\n")
+
+    client.send(f":{server_name} 318 {client.nickname} {target_client.nickname} :End of /WHOIS list.\r\n")
 
 def handle_unknown_command(client, command):
     """Handle any unknown or unsupported commands from the client.
@@ -504,41 +522,7 @@ def ping_client(client):
             print(f"Error in ping_thread for {client.nickname}: {e}")
             client.close("Ping thread error")
             break
-
-def handle_whois_command(client, params):
-    """Handle the WHOIS command when 'WHOIS' is received."""
-    if len(params) < 1:
-        client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
-        return
-
-    target_nick = params[0]
-    with clients_lock:
-        target_client = clients.get(target_nick)
-
-    if not target_client:
-        client.send(f":{server_name} 401 {client.nickname} {target_nick} :No such nick/channel\r\n")
-        return
-
-    # Send user information
-    client.send(f":{server_name} 311 {client.nickname} {target_client.nickname} {target_client.username} "
-                f"{target_client.address[0]} * :{target_client.realname}\r\n")
-
-    # Send server information
-    client.send(f":{server_name} 312 {client.nickname} {target_client.nickname} {server_name} :Server Info\r\n")
-
-    # Send channel list
-    channels_list = ' '.join(target_client.channels)
-    client.send(f":{server_name} 319 {client.nickname} {target_client.nickname} :{channels_list}\r\n")
-
-    # Send idle time and signon time
-    idle_time = int(time.time() - target_client.last_activity)
-    signon_time = int(target_client.signon_time)
-    client.send(f":{server_name} 317 {client.nickname} {target_client.nickname} {idle_time} {signon_time} "
-                f":seconds idle, signon time\r\n")
-
-    # End of WHOIS
-    client.send(f":{server_name} 318 {client.nickname} {target_client.nickname} :End of /WHOIS list.\r\n")
-
+            
 def main():
     """Initialize and start the server, accepting and handling client connections."""
     global server_socket
