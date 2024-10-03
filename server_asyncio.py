@@ -176,10 +176,7 @@ async def handle_client(reader, writer):
     try:
         while True:
             try:
-                data = await asyncio.wait_for(
-                    asyncio.get_event_loop().sock_recv(reader, 1024),
-                    timeout=60.0  # set the timeout to 60 seconds
-                )
+                data = await reader.readline()
                 if not data:
                     print(f"No data received. Closing connection for {client.nickname}")
                     break
