@@ -43,13 +43,13 @@ import random
 import argparse
 import threading
 import os
-
+import time
 
 
 # Define the bot's command response functionality
 class IRCBot:
     # Bot instantiates the data structures required for network communication
-    
+
     def __init__(self, host, port, name, channel):
         self.server = host
         self.port = port
@@ -75,7 +75,7 @@ class IRCBot:
             print(f"{facts_file} File not found.")
         return facts
 
-    
+
     # Send a command to the IRC server
     def send_message(self,command):
         if self.socket:
@@ -94,24 +94,25 @@ class IRCBot:
         self.send_command(f"JOIN {channel}")
         self.send_command(f"NAMES {channel}")  # Send NAMES command to get user list
 
-   
+
     # Handle incoming messages from the server
     def handle_message(self, message):
         print(f"Received message: {message}")
         if message.startswith("PING"):  # Handle server PING
             self.send_command(f"PONG {message.split()[1]}")  # Respond to the PING to keep the connection alive
             return
+
         components = message.split()
         prefix = components[0]
         command = components[1]
         params = components[2:-1]
         content = components[-1]
-        
+
         user = prefix.split('!')[0][1:]  # Extract the username
 
         if user == self.name:  # Ignore messages from the bot itself
             return
-        
+
         if command == "001":  # Welcome message
             self.server_info["welcome"] = message.split(":", 2)[-1]
             print(f"Welcome: {self.server_info['welcome']}")
@@ -141,11 +142,11 @@ class IRCBot:
         # Handle LIST response (numeric reply 322 is for a channel information)
         elif command == "322":  # '322' is a numeric reply for LIST response
             self.handle_channelInfo(params)
-            
+
         elif command == "353":  # '353' is a response code for the NAMES command
             self.channel_users[self.channel] = message.split(':')[-1].strip().split()  # Extract usernames
             print(f"user_list: {self.channel_users}")
-            
+
         elif command == "433":
             self.handle_invalid_nickname(self.name)
 
@@ -170,7 +171,7 @@ class IRCBot:
                 users.remove(old_nick)
                 users.append(new_nick)
                 print(f"Updated {channel} user list: {self.channel_users[channel]}")
-                
+
     def handle_whois(self,params,content):
         nickname = params[1]  # Nickname being queried
         username = params[2]
@@ -178,14 +179,14 @@ class IRCBot:
         realname =  content.strip(":")
         response = f"{nickname} is {username}@{hostname} ({realname})"
         self.send_command(f"PRIVMSG {self.channel} :{response}")
-        
+
     def handle_channelInfo(self,params):
         channel_name = params[1]
         user_count = params[2]
         topic = ' '.join(params[3:])
         response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
         self.send_command(f"PRIVMSG {self.channel} :{response}")
-        
+
     def handle_invalid_nickname(self,name):
         class NicknameError(Exception):
             # The exception to handle nickname error
@@ -193,7 +194,7 @@ class IRCBot:
                     self.message = message
                     super().__init__(self.message)
         raise NicknameError(f"Error, the nickname'{name}' is already in use! Please change it and try again.")
-           
+
     def handle_join(self,prefix,content):
         user = prefix.split('!')[0][1:]  # Extract the username
         channel = content  # Extract the channel name
@@ -234,7 +235,7 @@ class IRCBot:
                 self.process_random_slap(channel,user)
             elif len(parts) == 2:  # A specific user is provided as a target
                 self.process_specific_slap(parts,channel,user)
-                
+
         # Handle the !whois command
         elif command.startswith("!whois"):
             self.process_whois(command,channel)
@@ -242,14 +243,14 @@ class IRCBot:
         # Handle the !list command to list all active channels
         elif command == "!list":
             self.process_list(channel,user)
-            
-                
+
+
     def process_hello(self,channel,user):
         if channel == self.name:  # If it's a private message
             self.send_command(f"PRIVMSG {user} :Hello {user}!")
         else:
             self.send_command(f"PRIVMSG {channel} :Hello {user}!")
-            
+
     def process_random_slap(self,channel,user):
         other_users = self.get_other_users(channel, user)
         if other_users:
@@ -263,7 +264,7 @@ class IRCBot:
                 self.send_command(f"PRIVMSG {user} :No one else to slap (private)!")
             else:
                 self.send_command(f"PRIVMSG {channel} :No other users to slap.")
-    
+
     def process_specific_slap(self,parts,channel,user):
         target = parts[1]
         other_users = self.get_other_users(channel, user)
@@ -277,7 +278,7 @@ class IRCBot:
                 self.send_command(f"PRIVMSG {user} :{target} is not here, so you slap yourself!")
             else:
                 self.send_command(f"PRIVMSG {channel} :{user}, {target} is not satisfied, so you slap yourself!")
-                
+
     def process_whois(self,command,channel):
         parts = command.split()
         if len(parts) == 2:
@@ -285,13 +286,13 @@ class IRCBot:
             self.send_command(f"WHOIS {target}")  # Query user info using WHOIS
         else:
             self.send_command(f"PRIVMSG {channel} :Usage: !whois <username>")
-            
+
     def process_list(self,channel,user):
         if channel == self.name:  # Private message case
             self.send_command(f"PRIVMSG {user} :Listing all active channels ")
         else:
             self.send_command("LIST")  # Send the LIST command to the server
-        
+
     # Fetch the list of other users in the channel, excluding the bot itself
     def get_other_users(self, channel, exclude_user):
        users=self.channel_users[self.channel]
@@ -300,7 +301,7 @@ class IRCBot:
             if user != exclude_user and user != self.name and user not in user_list:
                 user_list.append(user)
        return user_list
-   
+
    # Connect to the server and join the channel, ensuring the bot identifies itself properly
     def connect(self):
         try:
@@ -317,11 +318,32 @@ class IRCBot:
         self.send_command(f"USER {self.name} 0 * :{self.name}")  # Send the user information
         self.join_channel(self.channel)
 
+    # "Send PING at regular intervals."
+    def ping_server(self):
+        last_message_time = time.time()  # Record the time when the bot starts
+
+        while self.running:
+            time.sleep(1)  # Check every second to see if 60 seconds have passed
+
+            # If 60 seconds have passed since the last message was received
+            if time.time() - last_message_time >= 60:
+                if self.running:
+                    # Get the bot's local IPv6 address and port using getsockname()
+                    local_ip, local_port, *_ = self.socket.getsockname()
+
+                    # Format the PING message with IPv6 and port information
+                    ping_info = f"[{local_ip}]:{local_port}"
+                    self.send_command(f"PING {ping_info}")
+
+                    last_message_time = time.time()  # Reset the timer after sending PING
+
     # Main loop to continuously receive and process messages
     def run(self):
         if self.connect():
             thread = threading.Thread(target=bot.initialize)
             thread.start()
+            ping_thread = threading.Thread(target=self.ping_server)
+            ping_thread.start()
             while self.running:
                 try:
                     # Receive data from the socket
@@ -369,7 +391,7 @@ if __name__ == "__main__":
     # bot.connect()
     thread = threading.Thread(target=bot.run)
     thread.start()
-    
+
     # Deal with console
     try:
         while True:
