@@ -1,12 +1,56 @@
+"""
+IRC Server Implementation
+
+Author: 
+Hongyu Lin
+Jingran Li
+Siming Lv
+
+Date: [2024/9/20]
+
+Description:
+The python project implements a simple IRC (Internet Relay Chat) server, keep to RFC 1459 protocal standard.
+The server supports message communication between clients, including private message and channel message.  It 
+uses TCP socket to maintain the connection with clients, with the ablity to handle commands including NICK、USER、
+JOIN、PART、PRIVMSG and PING/PONG.
+
+Key Features:
+1. use NICK and USER command to login the client
+2. real-time communication between clients, including channel communication and private communication.
+3. send PING message regularly to make sure the client is still in connection. If the client doesn't answer, the server will disconnect the client automatically
+4. create channel dynamically, create channel when a client joins a channel that doesn't exist, delete channel when the last client leave the channel.
+5. use regular expression to verify the nickname, to makesure the nick name corresponds to the stipulation. 
+
+Usage Guide:
+1. after launching, the servber will listen on 6667 port, waiting for the connection
+2. the server supports clients which conform IRC protocal
+3. communication works through TCP on ipv6 (or ipv4).
+
+How to Run:
+1. install python on your system
+2. open the command line, change the current path to the folder's path, input "python server.py", and press enter
+3. connect an IRC client to server.
+
+Known Issues:
+1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
+2. the server may don't completely follow all the IRC protocal specification
+3. channel message can't be sent to the user successfully
+
+Future Improvements:
+1. further normalize the code logic with the IRC specification
+2. implement more IRC commands
+"""
 import asyncio
 import socket
 import time
 import re
 import psutil
+import threading
 
 # Constants
-HOST = '::'  # Listen on all IPv6 addresses
-PORT = 6667  # Port to listen on
+HOST = '::'  # The server listens on all IPv6 addresses, allowing for wider connectivity across different networks.
+PORT = 6667  # Port required.
+PORT = 6667  # Regular PING messages are sent every 60 seconds to check if the client is still responsive.
 PING_INTERVAL = 60  # Interval (in seconds) between PING messages
 PING_TIMEOUT = 120  # Timeout (in seconds) for PONG responses
 BUFFER_SIZE = 1024  # Receive buffer size
@@ -26,10 +70,10 @@ class Client:
     def __init__(self, reader, writer, address):
         self.reader = reader    # StreamReader object for the client
         self.writer = writer    # StreamWriter object for the client
-        self.address = address
-        self.nickname = None
-        self.username = None
-        self.realname = None
+        self.address = address  # IP address and port of the connected client.
+        self.nickname = None    # Nickname of the client, will be set after registration.
+        self.username = None    # Username provided by the client during registration.
+        self.realname = None    # Real name or full name of the client, also set during registration.
         self.last_pong = time.time()  # Last time a PONG was received from the client
         self.channels = set()  # Set of channels the client is a member of
         self.lock = asyncio.Lock()  # Lock for thread-safe operations on this client
@@ -38,60 +82,87 @@ class Client:
         self.signon_time = time.time()  # Time when the client connected
 
     async def send(self, message):
-        """Send a message to the client."""
+        """Send a message to the client.
+
+        This function ensures the client receives server messages (including responses to their commands).
+        The lock ensures thread-safety since multiple threads could interact with the same client simultaneously.
+        """
         try:
             async with self.lock:
                 self.writer.write(message.encode('utf-8'))
                 await self.writer.drain()
-                self.last_activity = time.time()
+                self.last_activity = time.time() # Update the last activity timestamp to monitor for idle clients.
         except Exception as e:
+            # Log any issue that might occur when sending the message to the client for debugging and monitoring.
             print(f"Error sending message to {self.nickname}: {e}")
 
     async def close(self, reason="Disconnected"):
-        """Close the client's connection and remove them from all channels."""
+        """Close the client's connection and clean up references.
+
+        This method ensures that clients who leave are removed from the server's data structures to avoid memory leaks.
+        It also broadcasts a notice to other users to maintain an active conversation flow.
+        """
         try:
-            self.writer.close()
+            self.writer.close() # Close the client's socket to terminate the connection.
             await self.writer.wait_closed()
-            self.last_activity = time.time()
+            self.last_activity = time.time()  # Mark the time the client left.
         except Exception as e:
             print(f"Error closing connection for {self.nickname}: {e}")
         if self.nickname:
             async with clients_lock:
                 if self.nickname in clients:
-                    del clients[self.nickname]
-            await leave_all_channels(self)
+                    del clients[self.nickname]  # Ensure the client is removed from the global client list.
+            await leave_all_channels(self)  # Remove the client from any channels they were part of.
+            # Inform all clients in the server that this user has left.
             await broadcast(f":server NOTICE * :{self.nickname} has left the chat room ({reason})\r\n", exclude=self)
             print(f"{self.nickname} has disconnected: {reason}")
 
 
 async def broadcast(message, exclude=None):
-    """Broadcast a message to all clients except the excluded one."""
+    """Send a message to all clients except one.
+
+    Broadcasting ensures that all users in the chat are informed about general notices, such as users joining or leaving.
+    The optional exclude parameter allows certain users (e.g., the one who sent the message) to be excluded from receiving the broadcast.
+    """
     async with clients_lock:
         for client in clients.values():
             if client != exclude:
-                await client.send(message)
+                await client.send(message)  # Notify all clients except the one specified.
 
 
 async def leave_all_channels(client):
-    """Remove the client from all channels they are a part of and notify others."""
+    """Remove a client from all channels they are part of and notify the rest of the channel members.
+
+    This method ensures that when a client leaves, channels are updated appropriately, including removing empty channels.
+    Broadcasting the departure keeps users aware of changes in channel membership.
+    """
     async with channels_lock:
         for channel in list(client.channels):
             if channel in channels:
-                channels[channel].discard(client.nickname)
+                channels[channel].discard(client.nickname)  # Remove the client from the channel's member list.
+                # If no users are left in the channel, delete the channel.
                 if not channels[channel]:
                     del channels[channel]
                 else:
+                    # Notify the remaining users in the channel that this client has left.
                     await broadcast(f":server NOTICE {channel} :{client.nickname} has left the channel\r\n", exclude=client)
-            client.channels.discard(channel)
+            client.channels.discard(channel)  # Remove the channel from the client's list of joined channels.
 
 
 def validate_nickname(nickname):
-    """Validate the nickname according to the defined regex."""
+    """Ensure that a nickname meets the required pattern for IRC.
+
+    This helps enforce a consistent naming convention and prevents clients from choosing inappropriate or conflicting names.
+    """
     return NICKNAME_REGEX.match(nickname) is not None
 
 
 async def handle_client(reader, writer):
-    """Handle communication with a connected client."""
+    """Manage the communication with a connected client.
+
+    This function encapsulates the lifecycle of a client connection, from initial connection, to sending/receiving messages, and finally, disconnection.
+    It also starts the PING thread, which ensures the client remains active, sending periodic health checks.
+    """
     addr = writer.get_extra_info('peername')
     client = Client(reader, writer, addr)
 
@@ -101,17 +172,24 @@ async def handle_client(reader, writer):
     # Start PING coroutine
     asyncio.create_task(ping_client(client))
 
-    # Receive and process data from the client
+    # Main loop for receiving data from the client.
     try:
         while True:
-            data = await reader.readline()
-            if not data:
-                print(f"No data received. Closing connection for {client.nickname}")
+            try:
+                data = await asyncio.wait_for(
+                    asyncio.get_event_loop().sock_recv(reader, 1024),
+                    timeout=60.0  # set the timeout to 60 seconds
+                )
+                if not data:
+                    print(f"No data received. Closing connection for {client.nickname}")
+                    break
+                messages = data.decode('utf-8').strip().split('\r\n')
+                for message in messages:
+                    if message:
+                        await process_command(client, message)  # Delegate each message to the appropriate command handler.
+            except asyncio.TimeoutError:
+                print(f"Client {client.nickname} timed out due to inactivity.")  # Log a timeout error.
                 break
-            messages = data.decode('utf-8').strip().split('\r\n')
-            for message in messages:
-                if message:
-                    await process_command(client, message)
     except Exception as e:
         print(f"Error receiving data from {client.nickname}: {e}")
     finally:
@@ -119,7 +197,11 @@ async def handle_client(reader, writer):
 
 
 async def process_command(client, message):
-    """Process and handle IRC commands received from a client."""
+    """Process IRC commands sent by the client.
+
+    Each message received from the client follows the IRC protocol and is parsed here.
+    Based on the command, the appropriate function is called to handle it, ensuring smooth communication between the client and server.
+    """
     print(f"Received from {client.nickname or 'Unknown'}: {message}")
     parts = message.split(' ')
     command = parts[0].upper()
@@ -134,19 +216,6 @@ async def process_command(client, message):
 
     elif command == "USER":
         await handle_user_command(client, parts)
-        # if len(parts) < 2:
-        #     await client.send(f":{server_name} 461 {client.nickname} {command} :Not enough parameters\r\n")
-        #     return
-        # client.username = parts[1]
-        # print(f"Client {client.nickname} set username to {client.username}")
-        # if client.nickname and client.username and not client.registered:
-        #     client.registered = True
-        #     await client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
-        #     await client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
-        #     await client.send(f":{server_name} 003 {client.nickname} :This server is created sometime\r\n")
-        #     await client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
-        #     await client.send(f":{server_name} 251 {client.nickname} :There are {len(clients)} users and 1 server\r\n")
-        #     await broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
     elif command == "PONG":
         client.last_pong = time.time()
@@ -201,7 +270,11 @@ async def process_command(client, message):
 
 
 async def handle_cap_command(client, parts):
-    """Handle the CAP command to tell the client the capabilities the server has."""
+    """Handle the CAP command, which manages capability negotiation between the client and server.
+
+    CAP negotiation is part of the modern IRC protocol to handle features like SASL authentication and multi-prefixes.
+    Clients initiate this command to request certain capabilities from the server.
+    """
     if len(parts) < 2:
         return
 
@@ -224,7 +297,10 @@ async def handle_cap_command(client, parts):
         await client.send(f":{server_name} 410 {client.nickname} :Invalid CAP subcommand\r\n")
 
 async def handle_nick_command(client, parts):
-    """Handle the NICK command."""
+    """Handles the NICK command, which sets or changes the client's nickname.
+
+    Ensuring unique and valid nicknames avoids conflicts and maintains a clear identity for each user.
+    """
     if len(parts) < 2:
         await client.send(f":{server_name} 431 * :No nickname given\r\n")
         return
@@ -241,7 +317,7 @@ async def handle_nick_command(client, parts):
         client.nickname = new_nick
         clients[new_nick] = client
         if old_nick and old_nick in clients:
-            del clients[old_nick]
+            del clients[old_nick]  # Remove the old nickname reference from the clients dictionary.
 
     await client.send(f":{server_name} 001 {new_nick} :Nickname set to {new_nick}\r\n")
     await client.send(f":{server_name} 002 {new_nick} :Please send USER command to complete registration\r\n")
@@ -252,11 +328,15 @@ async def handle_nick_command(client, parts):
         await complete_registration(client)
 
 async def handle_user_command(client, parts):
-    """Handle the USER command."""
+    """Handles the USER command, which sets the client's username and realname.
+
+    Completing the USER and NICK commands is required for the client to register and participate fully.
+    """
     if len(parts) < 2:
         await client.send(f":{server_name} 461 {client.nickname} USER :Not enough parameters\r\n")
         return
     client.username = parts[1]
+    client.realname = ' '.join(parts[4:]).lstrip(':')
     print(f"Client {client.nickname} set username to {client.username}")
 
     if client.nickname and client.username and not client.registered:
@@ -264,17 +344,24 @@ async def handle_user_command(client, parts):
 
 
 async def complete_registration(client):
-    """Complete the registration process once both NICK and USER are set."""
-    client.registered = True
+    """Complete the registration process once both NICK and USER are set and send a welcome message to the client once they have successfully registered.
+
+    This series of messages follows the IRC protocol's welcome sequence, providing
+    the client with basic server information, including the number of users.
+    """
+    client.registered = True  # Mark the client as registered once they provide both NICK and USER details.
     await client.send(f":{server_name} 001 {client.nickname} :Welcome to the IRC network, {client.nickname}\r\n")
     await client.send(f":{server_name} 002 {client.nickname} :Your host is {server_name}, running version {server_version}\r\n")
     await client.send(f":{server_name} 003 {client.nickname} :This server was created at some time\r\n")
     await client.send(f":{server_name} 004 {client.nickname} {server_name} {server_version} o o\r\n")
+    # Provide information about the current number of connected users.
     await client.send(f":{server_name} 251 {client.nickname} :There are {len(clients)} users and 1 server\r\n")
+    # Broadcast to all clients that a new user has joined.
     await broadcast(f":server NOTICE * :{client.nickname} has joined the chat room\r\n", exclude=client)
 
 async def join_channel(client, channel_name):
-    """Add the client to a channel and notify other members."""
+    """ To handle the operation of joining the object channel after "JOIN" is received.
+    Add the client to a channel and notify other members."""
     async with channels_lock:
         if channel_name not in channels:
             channels[channel_name] = set()
@@ -303,7 +390,8 @@ async def join_channel(client, channel_name):
 
 
 async def handle_names_command(client, parts):
-    """Send the list of users in the specified channel or all channels."""
+    """To handle the operation of sending each name of the current channel's users after "NAMES" is received.
+    Send message of the user's name list in the chatroom, including users in specific channel."""
     if len(parts) < 2:
         # No channel specified, return all user lists
         async with channels_lock:
@@ -323,7 +411,8 @@ async def handle_names_command(client, parts):
 
 
 async def part_channel(client, channel_name):
-    """Remove the client from a channel and notify other members."""
+    """To handle the operation of leaving the object channel after "PART" is received.
+    Remove the client from a channel and notify other members."""
     async with channels_lock:
         if channel_name in channels and client.nickname in channels[channel_name]:
             # Notify other members in the channel
@@ -343,7 +432,8 @@ async def part_channel(client, channel_name):
 
 
 async def send_channel_message(sender, channel_name, message):
-    """Send a message to all members of a channel."""
+    """To handle the operation of sending message to the object channel after "PRIVMSG" is received and the second argument start with "#".
+    Send a message to all members of a channel."""
     async with channels_lock:
         if channel_name not in channels:
             await sender.send(f":{server_name} 403 {sender.nickname} {channel_name} :No such channel\r\n")
@@ -367,7 +457,8 @@ async def send_channel_message(sender, channel_name, message):
 
 
 async def send_private_message(sender, target_nick, message):
-    """Send a private message to a specific client."""
+    """To handle the operation of sending private message to the object client after "PRIVMSG" is received.
+    Send a private message to a specific client."""
     async with clients_lock:
         target_client = clients.get(target_nick)
     if target_client:
@@ -382,7 +473,7 @@ async def send_private_message(sender, target_nick, message):
 
 
 async def ping_client(client):
-    """Periodically send PING messages to the client and check for responses."""
+    """Periodically send PING messages to the client and check for responses in order to insure the connection is maintained."""
     while True:
         await asyncio.sleep(PING_INTERVAL)
         try:
@@ -401,7 +492,7 @@ async def ping_client(client):
 
 
 async def handle_whois_command(client, params):
-    """Handle the WHOIS command."""
+    """Handle the WHOIS command when 'WHOIS' is received."""
     if len(params) < 1:
         await client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
         return
@@ -437,14 +528,15 @@ async def handle_whois_command(client, params):
 
 async def main():
     """Initialize and start the server, accepting and handling client connections."""
-    # 创建一个 IPv6 套接字
+    # Create an IPV6 socket to listen for incoming connections
     server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
     server_socket.listen(5)
     server_socket.setblocking(False)
+    server_socket.settimeout(1.0)
 
-    # 使用 asyncio.start_server 并传递套接字
+    # Use asyncio to handle the client connection, while using the socket to listen the connection
     server = await asyncio.start_server(handle_client, sock=server_socket)
     addr = server_socket.getsockname()
     print(f"Serving on {addr}")
