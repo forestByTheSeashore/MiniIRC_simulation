@@ -104,7 +104,7 @@ class Client:
             self.socket.close()  # Close the client's socket to terminate the connection.
             self.last_activity = time.time()  # Mark the time the client left.
         except Exception as e:
-            print(f"Error closing connection for {self.nickname}: fe}")
+            print(f"Error closing connection for {self.nickname}: fe")
         if self.nickname:
             with clients_lock:
                 if self.nickname in clients:

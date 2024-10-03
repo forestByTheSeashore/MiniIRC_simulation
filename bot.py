@@ -235,6 +235,8 @@ class IRCBot:
                 self.process_random_slap(channel,user)
             elif len(parts) == 2:  # A specific user is provided as a target
                 self.process_specific_slap(parts,channel,user)
+            else:
+                self.send_command(f"PRIVMSG {channel} :Usage: !slap <username> or !slap(to slap a random user)")
 
         # Handle the !whois command
         elif command.startswith("!whois"):
@@ -252,11 +254,11 @@ class IRCBot:
             self.send_command(f"PRIVMSG {channel} :Hello {user}!")
 
     def process_random_slap(self,channel,user):
-        other_users = self.get_other_users(channel, user)
+        other_users = self.get_other_users(user)
         if other_users:
             target = random.choice(other_users)
             if channel == self.name:  # Private message case
-                self.send_command(f"PRIVMSG {user} :You slapped {target} with a trout!")
+                self.send_command(f"PRIVMSG {user} :You slapped {target} with a trout! Even if I don't know why you slap a random person in the private chat. :(")
             else:
                 self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
         else:
@@ -267,17 +269,26 @@ class IRCBot:
 
     def process_specific_slap(self,parts,channel,user):
         target = parts[1]
-        other_users = self.get_other_users(channel, user)
+        other_users = self.get_other_users(user)
         if target in other_users:
             if channel == self.name:  # Private message case
-                self.send_command(f"PRIVMSG {user} :You slapped {target} with a trout!")
+                self.send_command(f"PRIVMSG {user} :You slapped {target} in a private chat? What a person you are!")
             else:
-                self.send_command(f"PRIVMSG {channel} :{user} slapped {target} with a trout!")
+                self.send_command(f"PRIVMSG {channel} :{user} slapped your target:{target} with a trout!")
         else:
             if channel == self.name:  # Private message case
-                self.send_command(f"PRIVMSG {user} :{target} is not here, so you slap yourself!")
+                if target == user:
+                    self.send_command(f"PRIVMSG {user} :{user}, I don't know why, but you slapped yourself, so sad.")
+                elif target == self.name:
+                    self.send_command(f"PRIVMSG {user} :{user}, you want to slap me? No way, I just dodged it~ :)")
+                else:
+                    self.send_command(f"PRIVMSG {user} :I cannot find {target}, so you slap yourself!")
+            elif target == self.name:
+                self.send_command(f"PRIVMSG {channel} :{user}, you want to slap me? No way, I just dodged it~ :)")
+            elif target == user:
+                self.send_command(f"PRIVMSG {channel} :{user}, I don't know why, but you slapped yourself, so sad.")
             else:
-                self.send_command(f"PRIVMSG {channel} :{user}, {target} is not satisfied, so you slap yourself!")
+                self.send_command(f"PRIVMSG {channel} :{target} is not here, so you slap yourself!")
 
     def process_whois(self,command,channel):
         parts = command.split()
@@ -294,7 +305,7 @@ class IRCBot:
             self.send_command("LIST")  # Send the LIST command to the server
 
     # Fetch the list of other users in the channel, excluding the bot itself
-    def get_other_users(self, channel, exclude_user):
+    def get_other_users(self, exclude_user):
        users=self.channel_users[self.channel]
        user_list=[]
        for user in users:
