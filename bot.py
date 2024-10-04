@@ -15,11 +15,14 @@ Key Features:
 1. The bot connects to an IRC server using IPv6 and enters the target channel.
 2. The bot can handle the following commands:
    - '!hello' command will make the bot say hello to the user.
-   - '!slap' command will simulate an interaction, randomly 'slap' another user in a channel.
+   - '!slap' command will simulate an interaction, randomly 'slap' another user in a channel. Additionally, the !slap command can accept a parameter to specifically slap a particular user.
+   - '!list' command is used to display all the channels on the current server, along with relevant information such as the number of users and the channel topic.
+   - '!whois' command is used to query detailed information about a specific user. The usage is '!whois [parameter]'.
 3. The bot can randomly reply with an interesting fact or other replies.
 4. The bot can reply to PING commands from the server to ensure the connection stays active.
-5. The bot can use the 'NAMES' command to fetch the user list in the current channel, ensuring it won't 'slap' itself.
-6. It can handle situations like connection timeouts and other exceptions.
+5. The bot can send a PING command to the server at regular intervals to implement a heartbeat mechanism.
+6. The bot can use the 'NAMES' command to fetch the user list in the current channel, ensuring it won't 'slap' itself.
+7. It can handle situations like connection timeouts and other exceptions.
 
 Usage Instructions:
 When running the bot script, use the command line to input the host, port, bot name, and channel to join:
