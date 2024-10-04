@@ -5,42 +5,79 @@ Author:
 Hongyu Lin
 Jingran Li
 Siming Lv
+Chengyang Zhu
+Zijian Zhou
 
-Date: [2024/9/20]
+Date: [2024/10/4]
 
 Description:
-The python project implements a simple IRC (Internet Relay Chat) server, keep to RFC 1459 protocal standard.
-The server supports message communication between clients, including private message and channel message.  It 
-uses TCP socket to maintain the connection with clients, with the ablity to handle commands including NICK、USER、
-JOIN、PART、PRIVMSG and PING/PONG.
+    The python project implements a simple IRC (Internet Relay Chat) server, keep to RFC 1459 protocal standard.
+    The server supports message communication between clients, including private message and channel message.  It 
+    uses TCP socket to maintain the connection with clients, with the ablity to handle commands including NICK, USER,
+    JOIN, PART, PRIVMSG, PING/PONG, QUIT, LIST, NAMES, WHO, MODE, WHOIS, CAP, etc.
 
 Key Features:
-1. use NICK and USER command to login the client
-2. real-time communication between clients, including channel communication and private communication.
-3. send PING message regularly to make sure the client is still in connection. If the client doesn't answer, the server will disconnect the client automatically
-4. create channel dynamically, create channel when a client joins a channel that doesn't exist, delete channel when the last client leave the channel.
-5. use regular expression to verify the nickname, to makesure the nick name corresponds to the stipulation. 
+    All the functions are implemented with asyncio, to make sure the server can handle multiple clients simultaneously.
+    1. Use asyncio to manage multiple clients communication, to make sure the efficiency handling and robustness of the server, and capable of connecting many clients.
+    2. Use NICK and USER command to login the client.
+    3. Real-time communication between clients, including channel communication and private communication.
+    4. Send PING message regularly to make sure the client is still in connection. If the client doesn't answer, the server will disconnect the client automatically.
+    5. Create channel dynamically, create channel when a client joins a channel that doesn't exist, delete channel when the last client leave the channel.
+    6. Use regular expression to verify the nickname, to makesure the nick name corresponds to the stipulation. 
+    7. Handle the JOIN and PART command, which allows clients to join or leave channels, respectively.
+    8. Handle the CAP command, which manages capability negotiation between the client and server.
+    9. Handle the WHO and WHOIS command, which query information about channels or users, respectively.
+    10. Handle the MODE command, which sets or queries user or channel modes.
+    11. Handle the LIST command, which lists all channels and their topics.
+    12. Handle the NAMES command, which lists all users in a channel.
+    13. Handle the QUIT command, which allows clients to disconnect from the server.
+    14. Handle the PRIVMSG command, which sends messages to other clients in private or channels in public.
+    15. Server can detect the client's idle status, and mark the client as idle if the client is inactive for a certain period of time (meaning no messages sent except PING/PONG).
+    16. Our server also have robust error handling scheme, to make sure the server can handle the exception and keep running.
 
 Usage Guide:
-1. after launching, the servber will listen on 6667 port, waiting for the connection
-2. the server supports clients which conform IRC protocal
-3. communication works through TCP on ipv6 (or ipv4).
+    1. after launching, the server will listen on 6667 port waiting for any ipv6 address connection
+    2. the server supports clients which conform IRC protocal
+    3. communication works through TCP on ipv6. The server will send PING message to the client regularly to check the connection status
+    4. key information will be displayed on the server side, including the client's connection status, the message sent by the client, and the server's response
+    5. our server also supports the bot connection, the bot command like !hello, !slap, !whois, !list, etc can operate smoothly.
 
 How to Run:
-1. install python on your system
-2. open the command line, change the current path to the folder's path, input "python server.py", and press enter
-3. connect an IRC client to server.
-4. Input "Ctrl+C" to stop the server.
+    1. install python on your system
+    2. open the command line, change the current path to the folder's path, input "python server.py", and press enter, then the server will start.
+    3. connect an IRC client to server. And then operating as insturcted in "How to Test" part.
+    4. Input "Ctrl+C" to stop the server.
+
+How to Test:
+    1. After the server is started, open several hexchat clients to connect.
+    2. For hexchat, input the server's ipv6 address and port 6667 (eg. [IPv6_address]:6667), then input the nickname and username to connect.
+    3. If you find the nickname is already in use, please change another nickname by entering /nick newnickname. Our server can also update nickname by the secondary nickname choice provided by hexchat client. 
+    3. After connecting, you can send messages to the channel or private message to other clients:
+        - send message to channel: input "/join #channel_name" to join a channel, then input "/msg #channel_name message" to send message to the channel.
+        - send private message: input "/msg nickname message" to send private message to the client with the nickname.
+        - for channel or private message, you can also enter into hexchat client corresponding channel or private message window to send message.
+        - you can also input "/part #channel_name" to leave the channel.
+        - you can also input "/quit" to disconnect from the server.
+        - if you are inactive for a certain period of time, the server will mark you as idle and you can send message to the server to mark you as active.
+        - in hexchat window, clients can display broadcast messages from the server, including the client's connection status, the message sent by the client, and the server's response.
+        - if you enter invalid command, the server will show the unkown message and let you type the correct command again. 
+    4. You can also use the bot in this assignment to connect the server and test the communication, remember to input the correspoding server's ipv6 address and port 6667. Then operate a hexchat client that already in the #hello channel
+        - you can enter !hello to get a response from the bot.
+        - you can enter !slap to slap a random user by bot.
+        - you can enter !whois client_nickname to get the information of the client.
+        - you can enter !list to get the channel information.
+        - you can enter "/msg bot_nickname message" to get private message response from the bot.
+
 
 Known Issues:
-1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
-2. the server may don't completely follow all the IRC protocal specification
-3. channel message can't be sent to the user successfully
+    1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
+    2. the server may don't completely follow all the IRC protocal specifications
 
 Future Improvements:
-1. further normalize the code logic with the IRC specification
-2. implement more IRC commands
+    1. further normalize the code logic with more IRC commands specifications
+    2. add more features to the server, such as user authentication, connecting to third party large language model API for bot private message response, etc.
 """
+
 import asyncio
 import socket
 import time
