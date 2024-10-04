@@ -66,6 +66,10 @@ class IRCBot:
 
 
     def load_facts(self):
+        script_path = os.path.abspath(__file__)
+        script_dir = os.path.dirname(script_path)
+        
+        os.chdir(script_dir)
         facts_file = "facts.txt"
         facts = []
         if os.path.exists(facts_file):
@@ -105,7 +109,7 @@ class IRCBot:
         components = message.split()
         prefix = components[0]
         command = components[1]
-        params = components[2:-1]
+        params = components[2:]
         content = components[-1]
 
         user = prefix.split('!')[0][1:]  # Extract the username
@@ -183,8 +187,11 @@ class IRCBot:
     def handle_channelInfo(self,params):
         channel_name = params[1]
         user_count = params[2]
-        topic = ' '.join(params[3:])
-        response = f"Channel: {channel_name}, Users: {user_count}, Topic: {topic}"
+        if len(params) > 4:
+            topic = ' '.join(params[3:])
+        else:
+            topic = "(No topic)"
+        response = f"Channel: {channel_name}, Users: {user_count}, Topic{topic}"
         self.send_command(f"PRIVMSG {self.channel} :{response}")
 
     def handle_invalid_nickname(self,name):
