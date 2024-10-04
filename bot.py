@@ -67,9 +67,9 @@ class IRCBot:
 
     def load_facts(self):
         script_path = os.path.abspath(__file__)
-        script_dir = os.path.dirname(script_path)
-        
-        os.chdir(script_dir)
+        script_dir = os.path.dirname(script_path)
+     
+        os.chdir(script_dir)
         facts_file = "facts.txt"
         facts = []
         if os.path.exists(facts_file):
