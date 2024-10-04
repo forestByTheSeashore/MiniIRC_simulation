@@ -243,7 +243,10 @@ class IRCBot:
             elif len(parts) == 2:  # A specific user is provided as a target
                 self.process_specific_slap(parts,channel,user)
             else:
-                self.send_command(f"PRIVMSG {channel} :Usage: !slap <username> or !slap(to slap a random user)")
+                if channel == self.name:
+                    self.send_command(f"PRIVMSG {user} :Usage: !slap <username> or !slap(to slap a random user)")
+                else:
+                    self.send_command(f"PRIVMSG {channel} :Usage: !slap <username> or !slap(to slap a random user)")
 
         # Handle the !whois command
         elif command.startswith("!whois"):
