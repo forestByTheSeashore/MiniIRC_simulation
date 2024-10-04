@@ -30,6 +30,7 @@ How to Run:
 1. install python on your system
 2. open the command line, change the current path to the folder's path, input "python server.py", and press enter
 3. connect an IRC client to server.
+4. Input "Ctrl+C" to stop the server.
 
 Known Issues:
 1. the project doesn't handle SSL/ILS, thus the communication is unencrypted
@@ -53,7 +54,7 @@ PORT = 6667  # Port required.
 PORT = 6667  # Regular PING messages are sent every 60 seconds to check if the client is still responsive.
 PING_INTERVAL = 60  # Interval (in seconds) between PING messages
 PING_TIMEOUT = 120  # Timeout (in seconds) for PONG responses
-RES_TIMEOUT = 60
+RES_TIMEOUT = 60    # Timeout (in seconds) for client inactivity, marking them as idle
 BUFFER_SIZE = 1024  # Receive buffer size
 NICKNAME_REGEX = re.compile(r'^[A-Za-z][A-Za-z0-9_]{2,15}$')  # Nickname must be 3-16 characters, starting with a letter
 
@@ -277,6 +278,18 @@ async def process_command(client, message):
         # await leave_all_channels(client)
         await client.close(reason)
 
+    elif command == "WHO":
+        if len(parts) < 2:
+            await client.send(f":{server_name} 461 {client.nickname} WHO :Not enough parameters\r\n")
+        else:
+            await handle_who_command(client, parts[1:])
+
+    elif command == "MODE":
+        if len(parts) < 2:
+            await client.send(f":{server_name} 461 {client.nickname} MODE :Not enough parameters\r\n")
+        else:
+            await handle_mode_command(client, parts[1:])
+
     elif command == "WHOIS":
         if len(parts) < 2:
             await client.send(f":{server_name} 431 {client.nickname} :No nickname given\r\n")
@@ -409,6 +422,58 @@ async def join_channel(client, channel_name):
     # Print the clients in the current channel
     print(f"Current channel {channel_name}: {channels[channel_name]}")
 
+async def handle_who_command(client, params):
+    """Handle the WHO command, which queries information about users."""
+    target = params[0]
+    response = []
+
+    async with clients_lock:
+        if target.startswith("#"):
+            # WHO on a channel
+            async with channels_lock:
+                if target in channels:
+                    for nickname in channels[target]:
+                        target_client = clients[nickname]
+                        response.append(f":{server_name} 352 {client.nickname} {target} {target_client.username} "
+                                        f"{target_client.address[0]} {server_name} {target_client.nickname} H :0 {target_client.realname}\r\n")
+        else:
+            # WHO on a specific user
+            if target in clients:
+                target_client = clients[target]
+                response.append(f":{server_name} 352 {client.nickname} * {target_client.username} "
+                                f"{target_client.address[0]} {server_name} {target_client.nickname} H :0 {target_client.realname}\r\n")
+
+    response.append(f":{server_name} 315 {client.nickname} {target} :End of /WHO list.\r\n")
+    for line in response:
+        await client.send(line)
+
+async def handle_mode_command(client, params):
+    """Handle the MODE command, which sets or queries user or channel modes."""
+    target = params[0]
+    if target.startswith("#"):
+        # Channel mode
+        if len(params) == 1:
+            # Query channel mode
+            await client.send(f":{server_name} 324 {client.nickname} {target} +\r\n")
+        else:
+            # Set channel mode (not fully implemented, just an example)
+            mode = params[1]
+            if mode.startswith("+") or mode.startswith("-"):
+                await client.send(f":{server_name} MODE {target} {mode}\r\n")
+            else:
+                await client.send(f":{server_name} 472 {client.nickname} {mode} :is unknown mode char to me\r\n")
+    else:
+        # User mode
+        if len(params) == 1:
+            # Query user mode
+            await client.send(f":{server_name} 221 {client.nickname} +\r\n")
+        else:
+            # Set user mode (not fully implemented, just an example)
+            mode = params[1]
+            if mode.startswith("+") or mode.startswith("-"):
+                await client.send(f":{server_name} MODE {target} {mode}\r\n")
+            else:
+                await client.send(f":{server_name} 501 {client.nickname} :Unknown MODE flag\r\n")
 
 async def handle_names_command(client, parts):
     """To handle the operation of sending each name of the current channel's users after "NAMES" is received.
@@ -512,7 +577,7 @@ async def detect_idle(client):
         if current_time - client.last_activity > RES_TIMEOUT:
             print(f"{client.nickname} idle for more than {RES_TIMEOUT} seconds, marking as idle...")
             client.idle = True  # Mark the client as idle
-            await client.send(f":{server_name} NOTICE :You have been marked as idle due to inactivity.\r\n")
+            await client.send(f":{server_name} NOTICE {client.nickname} :You have been marked as idle due to inactivity.\r\n")
         else:
             client.idle = False  # Reset idle status if the client is active  
 
