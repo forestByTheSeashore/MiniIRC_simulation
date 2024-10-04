@@ -113,6 +113,7 @@ class IRCBot:
         content = components[-1]
 
         user = prefix.split('!')[0][1:]  # Extract the username
+        print(f"User: {user}, Command: {command}, Params: {params}, Content: {content}")
 
         if user == self.name:  # Ignore messages from the bot itself
             return
@@ -216,21 +217,26 @@ class IRCBot:
 
     def handle_part(self,prefix,params):
         user = prefix.split('!')[0][1:]  # Extract the username
-        channel = params[0]  # Extract the channel name
-        if channel in self.channel_users:
-            self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
-        print(f"{user} left {channel}")
+        if params:
+            channel = params[0]  # Extract the channel name
+            if channel in self.channel_users:
+                self.channel_users[channel].remove(user)  # Remove the user from the channel's user list
+            print(f"{user} left {channel}")
+        else:
+            print(f"Error: No channel specified in PART command from {user}")
 
     def handle_primsg(self,message):
         user = message.split('!')[0][1:]  # Extract the username
         channel = message.split()[2]  # Extract the channel name
         msg_content = message.split(f"PRIVMSG {channel} :")[1]
+        print(f"User: {user}, Channel: {channel}, Message: {msg_content}")
 
         if msg_content.startswith("!"):  # Handle commands starting with '!'
             self.process_command(user, channel, msg_content.strip())
         else:
             if channel == self.name:  # Private message case
                 random_reply = random.choice(self.responses)
+                print(f"Random reply: {random_reply}")
                 self.send_command(f"PRIVMSG {user} :{random_reply}")
 
     # Process specific commands received from users
