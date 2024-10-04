@@ -81,6 +81,7 @@ class Client:
         self.registered = False  # Flag to indicate if the client has completed registration
         self.last_activity = time.time()  # Last time the client sent a message
         self.signon_time = time.time()  # Time when the client connected
+        self.idle = False  # Flag to indicate if the client is idle
         self.tasks = set()  # Set of tasks for the client
 
     async def send(self, message):
@@ -153,6 +154,7 @@ async def leave_all_channels(client):
                     del channels[channel]
                 else:
                     # Notify the remaining users in the channel that this client has left.
+                    await broadcast(f":{client.nickname}!{client.username}@{client.address[0]} PART {channel}\r\n", exclude=client)
                     await broadcast(f":server NOTICE {channel} :{client.nickname} has left the channel\r\n", exclude=client)
             client.channels.discard(channel)  # Remove the channel from the client's list of joined channels.
 
@@ -180,6 +182,10 @@ async def handle_client(reader, writer):
     # Start PING coroutine
     ping_task = asyncio.create_task(ping_client(client))
     client.tasks.add(ping_task)
+
+    # Start IDLE coroutine
+    idle_task = asyncio.create_task(detect_idle(client))
+    client.tasks.add(idle_task)
 
     # Main loop for receiving data from the client.
     try:
@@ -268,6 +274,7 @@ async def process_command(client, message):
     elif command == "QUIT":
         reason = parts[1].lstrip(':') if len(parts) > 1 else "Client Quit"
         await client.send(f":{server_name} QUIT :{client.nickname} has quit ({reason})\r\n")
+        # await leave_all_channels(client)
         await client.close(reason)
 
     elif command == "WHOIS":
@@ -497,6 +504,17 @@ async def send_private_message(sender, target_nick, message):
     else:
         await sender.send(f":{server_name} 401 {sender.nickname} {target_nick} :No such nick/channel\r\n")
 
+async def detect_idle(client):
+    """Periodically check if the client is idle."""
+    while True:
+        await asyncio.sleep(RES_TIMEOUT)
+        current_time = time.time()
+        if current_time - client.last_activity > RES_TIMEOUT:
+            print(f"{client.nickname} idle for more than {RES_TIMEOUT} seconds, marking as idle...")
+            client.idle = True  # Mark the client as idle
+            await client.send(f":{server_name} NOTICE :You have been marked as idle due to inactivity.\r\n")
+        else:
+            client.idle = False  # Reset idle status if the client is active  
 
 async def ping_client(client):
     """Periodically send PING messages to the client and check for responses in order to insure the connection is maintained."""
@@ -507,11 +525,6 @@ async def ping_client(client):
 
         try:
             current_time = time.time()
-            if current_time - client.last_activity > RES_TIMEOUT:
-                print(f"{client.nickname} idle for more than 1 minute, disconnecting...")
-                await client.send(f":{server_name} ERROR :Closing Link: {client.nickname} (Idle timeout)\r\n")
-                await client.close("Idle timeout")
-                break
 
             if current_time - client.last_pong > PING_TIMEOUT:
                 missed_pongs += 1
