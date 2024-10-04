@@ -151,7 +151,10 @@ class IRCBot:
         elif command == "353":  # '353' is a response code for the NAMES command
             self.channel_users[self.channel] = message.split(':')[-1].strip().split()  # Extract usernames
             print(f"user_list: {self.channel_users}")
-
+        
+        elif command == "401" and params[0] == self.name:
+            self.send_command(f"PRIVMSG {self.channel} :Error: the user({params[1]}) you looking for does not exist.")
+            
         elif command == "433":
             self.handle_invalid_nickname(self.name)
 
@@ -256,7 +259,10 @@ class IRCBot:
 
         # Handle the !whois command
         elif command.startswith("!whois"):
-            self.process_whois(command,channel)
+            if channel == self.name:
+                self.send_command(f"PRIVMSG {user} :Usage: !whois should be sent in channel, not in private chat.")
+            else:
+                self.process_whois(command,channel)
 
         # Handle the !list command to list all active channels
         elif command == "!list":
