@@ -53,6 +53,7 @@ PORT = 6667  # Port required.
 PORT = 6667  # Regular PING messages are sent every 60 seconds to check if the client is still responsive.
 PING_INTERVAL = 60  # Interval (in seconds) between PING messages
 PING_TIMEOUT = 120  # Timeout (in seconds) for PONG responses
+RES_TIMEOUT = 60
 BUFFER_SIZE = 1024  # Receive buffer size
 NICKNAME_REGEX = re.compile(r'^[A-Za-z][A-Za-z0-9_]{2,15}$')  # Nickname must be 3-16 characters, starting with a letter
 
@@ -80,6 +81,7 @@ class Client:
         self.registered = False  # Flag to indicate if the client has completed registration
         self.last_activity = time.time()  # Last time the client sent a message
         self.signon_time = time.time()  # Time when the client connected
+        self.tasks = set()  # Set of tasks for the client
 
     async def send(self, message):
         """Send a message to the client.
@@ -108,6 +110,12 @@ class Client:
             self.last_activity = time.time()  # Mark the time the client left.
         except Exception as e:
             print(f"Error closing connection for {self.nickname}: {e}")
+
+        # Cancel all associated tasks
+        for task in self.tasks:
+            task.cancel()
+        self.tasks.clear()
+
         if self.nickname:
             async with clients_lock:
                 if self.nickname in clients:
@@ -170,7 +178,8 @@ async def handle_client(reader, writer):
     print(f"Client connected: {addr}")
 
     # Start PING coroutine
-    asyncio.create_task(ping_client(client))
+    ping_task = asyncio.create_task(ping_client(client))
+    client.tasks.add(ping_task)
 
     # Main loop for receiving data from the client.
     try:
@@ -184,6 +193,7 @@ async def handle_client(reader, writer):
                 for message in messages:
                     if message:
                         await process_command(client, message)  # Delegate each message to the appropriate command handler.
+                        client.last_activity = time.time()
             except asyncio.TimeoutError:
                 print(f"Client {client.nickname} timed out due to inactivity.")  # Log a timeout error.
                 break
@@ -203,6 +213,10 @@ async def process_command(client, message):
     parts = message.split(' ')
     command = parts[0].upper()
     print(f"Command: {command}")
+    
+    if not client.registered and command not in ['NICK', 'USER', 'QUIT', 'PING', 'PONG']:
+        await client.send(f":{server_name} 451 * :You have not registered\r\n")
+        return
 
     # Handle the command based on the IRC protocol
     if command == 'CAP':
@@ -217,6 +231,9 @@ async def process_command(client, message):
     elif command == "PONG":
         client.last_pong = time.time()
         print(f"Received PONG from {client.nickname}")
+
+    elif command == "LIST":
+        await handle_list_command(client)
 
     elif command == "JOIN":
         if len(parts) < 2:
@@ -406,6 +423,18 @@ async def handle_names_command(client, parts):
             else:
                 await client.send(f":{server_name} 403 {client.nickname} {channel} :No such channel\r\n")
 
+async def handle_list_command(client):
+    """Handle the LIST command, which lists all channels and their topics."""
+    async with channels_lock:
+        if not channels:
+            await client.send(f":{server_name} 323 {client.nickname} :No channels available\r\n")
+            return
+
+        await client.send(f":{server_name} 321 {client.nickname} Channel :Users Name\r\n")
+        for channel_name, members in channels.items():
+            topic = "No topic set"  # Placeholder for channel topic
+            await client.send(f":{server_name} 322 {client.nickname} {channel_name} {len(members)} :{topic}\r\n")
+        await client.send(f":{server_name} 323 {client.nickname} :End of /LIST\r\n")
 
 async def part_channel(client, channel_name):
     """To handle the operation of leaving the object channel after "PART" is received.
@@ -461,7 +490,7 @@ async def send_private_message(sender, target_nick, message):
     if target_client:
         try:
             await target_client.send(f":{sender.nickname}!{sender.username}@{sender.address[0]} PRIVMSG {target_nick} :{message}\r\n")
-            await sender.send(f":{sender.nickname}!{sender.username}@{sender.address[0]} PRIVMSG {target_nick} :{message}\r\n")
+            # await sender.send(f":{sender.nickname}!{sender.username}@{sender.address[0]} PRIVMSG {target_nick} :{message}\r\n")
             print(f"{sender.nickname} sent private message to {target_nick}: {message}")
         except Exception as e:
             print(f"Error sending private message to {target_nick}: {e}")
@@ -471,15 +500,28 @@ async def send_private_message(sender, target_nick, message):
 
 async def ping_client(client):
     """Periodically send PING messages to the client and check for responses in order to insure the connection is maintained."""
+    missed_pongs = 0
+
     while True:
         await asyncio.sleep(PING_INTERVAL)
+
         try:
             current_time = time.time()
-            if current_time - client.last_pong > PING_TIMEOUT:
-                print(f"{client.nickname} did not respond to PING, disconnecting...")
-                await client.send(f":{server_name} ERROR :Closing Link: {client.nickname} (Ping timeout)\r\n")
-                await client.close("Ping timeout")
+            if current_time - client.last_activity > RES_TIMEOUT:
+                print(f"{client.nickname} idle for more than 1 minute, disconnecting...")
+                await client.send(f":{server_name} ERROR :Closing Link: {client.nickname} (Idle timeout)\r\n")
+                await client.close("Idle timeout")
                 break
+
+            if current_time - client.last_pong > PING_TIMEOUT:
+                missed_pongs += 1
+                if missed_pongs >= 3:
+                    print(f"{client.nickname} did not respond to PING, disconnecting...")
+                    await client.send(f":{server_name} ERROR :Closing Link: {client.nickname} (Ping timeout)\r\n")
+                    await client.close("Ping timeout")
+                    break
+            else:
+                missed_pongs = 0
             await client.send("PING :server\r\n")
             print(f"Sent PING to {client.nickname}")
         except Exception as e:
