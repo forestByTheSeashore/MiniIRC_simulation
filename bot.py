@@ -105,6 +105,8 @@ class IRCBot:
         if message.startswith("PING"):  # Handle server PING
             self.send_command(f"PONG {message.split()[1]}")  # Respond to the PING to keep the connection alive
             return
+        elif message.startswith("PONG"):
+            return
 
         components = message.split()
         prefix = components[0]
@@ -115,7 +117,7 @@ class IRCBot:
         user = prefix.split('!')[0][1:]  # Extract the username
         print(f"User: {user}, Command: {command}, Params: {params}, Content: {content}")
 
-        if user == self.name:  # Ignore messages from the bot itself
+        if user == self.name or command == "NOTICE":  # Ignore messages from the bot itself or server notice
             return
 
         if command == "001":  # Welcome message
