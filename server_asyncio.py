@@ -94,7 +94,7 @@ class Client:
             async with self.lock:
                 self.writer.write(message.encode('utf-8'))
                 await self.writer.drain()
-                self.last_activity = time.time() # Update the last activity timestamp to monitor for idle clients.
+                # self.last_activity = time.time() # Update the last activity timestamp to monitor for idle clients.
         except Exception as e:
             # Log any issue that might occur when sending the message to the client for debugging and monitoring.
             print(f"Error sending message to {self.nickname}: {e}")
