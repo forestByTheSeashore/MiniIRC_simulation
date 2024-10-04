@@ -68,6 +68,7 @@ class IRCBot:
     def load_facts(self):
         script_path = os.path.abspath(__file__)
         script_dir = os.path.dirname(script_path)
+     
         os.chdir(script_dir)
         facts_file = "facts.txt"
         facts = []
@@ -248,7 +249,10 @@ class IRCBot:
             elif len(parts) == 2:  # A specific user is provided as a target
                 self.process_specific_slap(parts,channel,user)
             else:
-                self.send_command(f"PRIVMSG {channel} :Usage: !slap <username> or !slap(to slap a random user)")
+                if channel == self.name:
+                    self.send_command(f"PRIVMSG {user} :Usage: !slap <username> or !slap(to slap a random user)")
+                else:
+                    self.send_command(f"PRIVMSG {channel} :Usage: !slap <username> or !slap(to slap a random user)")
 
         # Handle the !whois command
         elif command.startswith("!whois"):
