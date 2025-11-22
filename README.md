@@ -80,7 +80,7 @@ You can use any IRC client (e.g., HexChat) or the provided client to connect to 
 
 **使用项目客户端 | Using Project Client**
 ```bash
-python client.py --host <服务器地址> --port 6667 --name <昵称> --channel <频道名>
+python client.py --host <server_address> --port 6667 --name <nickname> --channel <channel_name>
 ```
 
 例如 | Example:
@@ -91,7 +91,7 @@ python client.py --host "::1" --port 6667 --name Alice --channel "#general"
 ### 3. 启动机器人 | Start Bot
 
 ```bash
-python bot.py --host <服务器地址> --port 6667 --name SuperBot --channel <频道名>
+python bot.py --host <server_address> --port 6667 --name SuperBot --channel <channel_name>
 ```
 
 例如 | Example:
