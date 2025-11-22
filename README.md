@@ -42,11 +42,11 @@ This project implements a fully functional IRC chat system, including server, cl
 
 ```
 MiniIRC_simulation/
-├── server.py           # 基于线程的 IRC 服务器实现
-├── server_asyncio.py   # 基于 asyncio 的异步 IRC 服务器实现
-├── client.py           # IRC 客户端和机器人客户端实现
-├── bot.py              # 独立的智能机器人实现
-└── facts.txt           # 机器人回复使用的随机事实列表
+├── server.py           # 基于线程的 IRC 服务器实现 | Thread-based IRC server implementation
+├── server_asyncio.py   # 基于 asyncio 的异步 IRC 服务器实现 | Async IRC server implementation with asyncio
+├── client.py           # IRC 客户端实现（包含普通客户端和机器人客户端）| IRC client implementation (includes regular client and bot client)
+├── bot.py              # 独立的智能机器人实现 | Standalone intelligent bot implementation
+└── facts.txt           # 机器人回复使用的随机事实列表 | Random facts list for bot responses
 ```
 
 ## 安装要求 | Requirements
@@ -121,15 +121,15 @@ python bot.py --host "::1" --port 6667 --name SuperBot --channel "#hello"
 
 After connecting to the server, you can use the following commands:
 
-- `/nick <新昵称>` - 更改昵称
-- `/join #频道名` - 加入频道
-- `/part #频道名` - 离开频道
-- `/msg #频道名 消息` - 向频道发送消息
-- `/msg 昵称 消息` - 向用户发送私信
-- `/quit [原因]` - 断开连接
-- `/whois 昵称` - 查询用户信息
-- `/list` - 列出所有频道
-- `/names [#频道名]` - 列出频道成员
+- `/nick <new_nickname>` - 更改昵称 | Change nickname
+- `/join #<channel_name>` - 加入频道 | Join a channel
+- `/part #<channel_name>` - 离开频道 | Leave a channel
+- `/msg #<channel_name> <message>` - 向频道发送消息 | Send message to channel
+- `/msg <nickname> <message>` - 向用户发送私信 | Send private message to user
+- `/quit [reason]` - 断开连接 | Disconnect
+- `/whois <nickname>` - 查询用户信息 | Query user information
+- `/list` - 列出所有频道 | List all channels
+- `/names [#<channel_name>]` - 列出频道成员 | List channel members
 
 ### 机器人命令 | Bot Commands
 
@@ -137,11 +137,11 @@ After connecting to the server, you can use the following commands:
 
 Use the following commands to interact with the bot in a channel:
 
-- `!hello` - 机器人会向你打招呼
-- `!slap` - 机器人会随机拍打频道中的一个用户
-- `!slap <用户名>` - 机器人会拍打指定用户
-- `!whois <用户名>` - 查询用户的详细信息
-- `!list` - 列出所有活跃的频道信息
+- `!hello` - 机器人会向你打招呼 | Bot will greet you
+- `!slap` - 机器人会随机拍打频道中的一个用户 | Bot will randomly slap a user in the channel
+- `!slap <username>` - 机器人会拍打指定用户 | Bot will slap the specified user
+- `!whois <username>` - 查询用户的详细信息 | Query detailed information about a user
+- `!list` - 列出所有活跃的频道信息 | List all active channel information
 
 ### HexChat 客户端测试 | Testing with HexChat
 
