@@ -52,7 +52,13 @@ MiniIRC_simulation/
 ## 安装要求 | Requirements
 
 - Python 3.7+
-- 标准库依赖: `socket`, `threading`, `asyncio`, `re`, `argparse`, `time`, `psutil`
+- 标准库依赖 | Standard library dependencies: `socket`, `threading`, `asyncio`, `re`, `argparse`, `time`
+- 外部依赖 | External dependencies: `psutil` (需要通过 pip 安装 | needs to be installed via pip)
+
+安装外部依赖 | Install external dependencies:
+```bash
+pip install psutil
+```
 
 ## 快速开始 | Quick Start
 
@@ -136,30 +142,36 @@ Use the following commands to interact with the bot in a channel:
 ### HexChat 客户端测试 | Testing with HexChat
 
 1. 打开 HexChat 客户端
-2. 添加新的网络，服务器地址格式: `[IPv6地址]:6667`
-3. 设置昵称和用户名
-4. 连接到服务器
-5. 使用 `/join #频道名` 加入频道
-6. 开始聊天！
+1. 打开 HexChat 客户端 | Open HexChat client
+2. 添加新的网络，服务器地址格式: `[IPv6地址]:6667` | Add a new network with server address format: `[IPv6_address]:6667`
+3. 设置昵称和用户名 | Set nickname and username
+4. 连接到服务器 | Connect to the server
+5. 使用 `/join #频道名` 加入频道 | Use `/join #channel_name` to join a channel
+6. 开始聊天！| Start chatting!
 
 ## 技术实现 | Technical Implementation
 
 ### 服务器实现 | Server Implementation
 
 - **server.py**: 使用 Python `threading` 模块实现多线程服务器，每个客户端连接由独立线程处理
+  
+  Uses Python `threading` module to implement a multi-threaded server, where each client connection is handled by an independent thread
+
 - **server_asyncio.py**: 使用 Python `asyncio` 模块实现异步服务器，能够高效处理大量并发连接
+  
+  Uses Python `asyncio` module to implement an asynchronous server, capable of efficiently handling a large number of concurrent connections
 
 ### 网络协议 | Network Protocol
 
-- 使用 TCP/IPv6 协议进行通信
-- 默认端口: 6667 (标准 IRC 端口)
-- 消息格式遵循 IRC 协议标准 (RFC 1459)
+- 使用 TCP/IPv6 协议进行通信 | Uses TCP/IPv6 protocol for communication
+- 默认端口: 6667 (标准 IRC 端口) | Default port: 6667 (standard IRC port)
+- 消息格式遵循 IRC 协议标准 (RFC 1459) | Message format follows IRC protocol standard (RFC 1459)
 
 ### 心跳机制 | Heartbeat Mechanism
 
-- 服务器每 60 秒发送 PING 消息
-- 客户端必须在 120 秒内响应 PONG
-- 未响应的客户端将被自动断开连接
+- 服务器每 60 秒发送 PING 消息 | Server sends PING messages every 60 seconds
+- 客户端必须在 120 秒内响应 PONG | Client must respond with PONG within 120 seconds
+- 未响应的客户端将被自动断开连接 | Unresponsive clients will be automatically disconnected
 
 ## 已知问题 | Known Issues
 
