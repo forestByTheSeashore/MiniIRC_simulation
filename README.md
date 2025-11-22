@@ -53,12 +53,16 @@ MiniIRC_simulation/
 
 - Python 3.7+
 - 标准库依赖 | Standard library dependencies: `socket`, `threading`, `asyncio`, `re`, `argparse`, `time`
-- 外部依赖 | External dependencies: `psutil` (需要通过 pip 安装 | needs to be installed via pip)
+- 外部依赖 | External dependencies: `psutil` (仅异步服务器需要 | only required for async server)
 
-安装外部依赖 | Install external dependencies:
+安装外部依赖（使用异步服务器时） | Install external dependencies (when using async server):
 ```bash
 pip install psutil
 ```
+
+**注意** | **Note**: 
+- 使用 `server.py` (线程版本) 不需要安装 psutil | Using `server.py` (threaded version) does not require psutil
+- 使用 `server_asyncio.py` (异步版本) 需要安装 psutil | Using `server_asyncio.py` (async version) requires psutil
 
 ## 快速开始 | Quick Start
 
