@@ -141,7 +141,6 @@ Use the following commands to interact with the bot in a channel:
 
 ### HexChat 客户端测试 | Testing with HexChat
 
-1. 打开 HexChat 客户端
 1. 打开 HexChat 客户端 | Open HexChat client
 2. 添加新的网络，服务器地址格式: `[IPv6地址]:6667` | Add a new network with server address format: `[IPv6_address]:6667`
 3. 设置昵称和用户名 | Set nickname and username
@@ -175,17 +174,17 @@ Use the following commands to interact with the bot in a channel:
 
 ## 已知问题 | Known Issues
 
-1. ⚠️ 不支持 SSL/TLS 加密，通信为明文传输
-2. ⚠️ 未完全实现所有 IRC 协议规范
-3. ⚠️ 某些高级功能可能需要进一步完善
+1. ⚠️ 不支持 SSL/TLS 加密，通信为明文传输 | Does not support SSL/TLS encryption; communication is in plaintext
+2. ⚠️ 未完全实现所有 IRC 协议规范 | Does not fully implement all IRC protocol specifications
+3. ⚠️ 某些高级功能可能需要进一步完善 | Some advanced features may need further refinement
 
 ## 未来改进 | Future Improvements
 
-1. 🔧 添加 SSL/TLS 支持以加密通信
-2. 🔧 实现更多 IRC 命令和功能
-3. 🔧 添加用户认证机制
-4. 🔧 集成第三方大语言模型 API 用于智能回复
-5. 🔧 改进错误处理和日志记录
+1. 🔧 添加 SSL/TLS 支持以加密通信 | Add SSL/TLS support for encrypted communication
+2. 🔧 实现更多 IRC 命令和功能 | Implement more IRC commands and features
+3. 🔧 添加用户认证机制 | Add user authentication mechanism
+4. 🔧 集成第三方大语言模型 API 用于智能回复 | Integrate third-party large language model APIs for intelligent responses
+5. 🔧 改进错误处理和日志记录 | Improve error handling and logging
 
 ## 作者 | Authors
 
