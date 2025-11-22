@@ -31,7 +31,7 @@ This project implements a fully functional IRC chat system, including server, cl
 ### 智能机器人 (Bot)
 - 🤖 **命令响应**:
   - `!hello` - 向用户打招呼
-  - `!slap [username]` - 随机或指定拍打用户
+  - `!slap [<username>]` - 随机或指定拍打用户
   - `!whois <username>` - 查询用户详细信息
   - `!list` - 列出所有活跃频道
 - 🤖 **随机回复**: 私聊时从预设列表中随机回复
@@ -90,8 +90,12 @@ You can use any IRC client (e.g., HexChat) or the provided client to connect to 
 
 **使用项目客户端 | Using Project Client**
 ```bash
-python client.py --host <server_address> --port 6667 --name <nickname> --channel <channel_name>
+python client.py --host <server_address> --port 6667 --name <nickname> --channel "#<channel_name>"
 ```
+
+**注意**: client.py 默认端口为 6666，连接到服务器时需要指定 --port 6667
+
+**Note**: client.py defaults to port 6666, specify --port 6667 to connect to the server
 
 例如 | Example:
 ```bash
@@ -106,12 +110,12 @@ python bot.py --host <server_address> --port 6667 --name SuperBot --channel <cha
 
 例如 | Example:
 ```bash
-python bot.py --host "::1" --port 6667 --name SuperBot --channel "#hello"
+python bot.py --host "::1" --port 6667 --name SuperBot --channel "hello"
 ```
 
-**注意**: 频道名不需要包含 `#` 符号，程序会自动添加。
+**注意**: 机器人的频道名不需要包含 `#` 符号，程序会自动添加。bot.py 默认端口为 6667。
 
-**Note**: The channel name does not need to include the `#` symbol; the program will add it automatically.
+**Note**: For the bot, the channel name does not need to include the `#` symbol; the program will add it automatically. bot.py defaults to port 6667.
 
 ## 使用指南 | Usage Guide
 
